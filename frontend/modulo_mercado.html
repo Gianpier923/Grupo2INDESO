@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InvestAI | Dashboard de Mercado Avanzado</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: { deep: '#0A1428', base: '#0D1B33', card: '#122548', border: '#1F3864' },
+          teal: '#26A69A', mint: '#4ADE80', gold: '#C5961A', sky: '#3B82F6', coral: '#EF5350',
+          ink: { 100: '#E2E8F3', 300: '#9FB0CE', 500: '#6B7A99' }
+        },
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+      }
+    }
+  };
+</script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+<style>
+  a:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid #4ADE80; outline-offset: 3px; border-radius: 0.5rem; }
+  ::selection { background: #26A69A; color: #0A1428; }
+  
+  /* Scrollbar personalizado para el panel */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1F3864; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9FB0CE; }
+</style>
+</head>
+
+<body class="bg-navy-base text-ink-100 font-sans antialiased flex flex-col min-h-screen">
+
+  <!-- ============ HEADER ============ -->
+  <header class="border-b border-navy-border/60 bg-navy-deep/40 shrink-0">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-teal/15 text-teal flex items-center justify-center shrink-0">
+          <i data-lucide="candlestick-chart" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
+            Ernesto Investing AI 
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gold/20 text-gold border border-gold/30">PRO</span>
+          </h1>
+          <p class="text-xs text-ink-300">Terminal de Mercado — Conectado a MongoDB Atlas</p>
+        </div>
+      </div>
+      <nav class="flex flex-wrap gap-2">
+        <a href="index.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border text-ink-300 text-sm hover:border-teal/60 hover:text-teal transition-colors">
+          <i data-lucide="home" class="w-4 h-4"></i> Portal
+        </a>
+        <a href="modulo_svc.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border text-ink-300 text-sm hover:border-mint/60 hover:text-mint transition-colors">
+          <i data-lucide="shield-check" class="w-4 h-4"></i> Clasificador SVC
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ============ CONTENIDO PRINCIPAL ============ -->
+  <main class="max-w-7xl mx-auto px-6 py-6 w-full flex-1">
+    
+    <div id="aviso" class="mb-6"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      
+      <!-- COLUMNA IZQUIERDA: GRÁFICO (Ocupa 3 columnas) -->
+      <div class="lg:col-span-3 flex flex-col gap-4">
+        
+        <!-- Barra de Controles -->
+        <div class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-navy-border/70 bg-navy-card/60">
+          <div class="flex items-center gap-3">
+            <div class="flex flex-col">
+              <label for="selTicker" class="text-[10px] font-bold uppercase tracking-wider text-ink-500 mb-1">Activo Minero</label>
+              <select id="selTicker" onchange="cargarDatos()"
+                class="px-4 py-2 rounded-xl bg-navy-deep border border-navy-border text-white text-sm font-semibold focus:border-teal outline-none appearance-none cursor-pointer min-w-[200px]">
+                <option value="FSM">FSM — Fortuna Silver</option>
+                <option value="VOLCABC1.LM">VOLCABC1.LM — Volcan</option>
+                <option value="ABX.TO">ABX.TO — Barrick Gold</option>
+                <option value="BVN" selected>BVN — Buenaventura</option>
+                <option value="BHP">BHP — BHP Billiton</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-4 text-sm">
+             <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy-deep border border-navy-border">
+               <div class="w-2 h-2 rounded-full bg-mint animate-pulse"></div>
+               <span class="text-ink-300 text-xs font-medium">API Conectada</span>
+             </div>
+          </div>
+        </div>
+
+        <!-- Contenedor del Gráfico -->
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-4 relative min-h-[500px] flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4 text-teal"></i>
+              <span class="text-xs font-bold uppercase tracking-wider text-ink-300">Análisis Técnico OHLCV + Volumen</span>
+            </div>
+            <div id="badge-fecha" class="text-xs text-ink-500 font-medium">--</div>
+          </div>
+          <div id="grafico" class="w-full flex-1 min-h-[450px]"></div>
+        </div>
+      </div>
+
+      <!-- COLUMNA DERECHA: PANEL DE DATOS (Ocupa 1 columna) -->
+      <div class="flex flex-col gap-4">
+        
+        <!-- Tarjeta: Cotización Actual -->
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 overflow-hidden">
+          <div class="bg-navy-deep/80 px-4 py-3 border-b border-navy-border/60">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-ink-300">Cotización Actual</h3>
+          </div>
+          <div class="p-5 flex flex-col items-center justify-center text-center">
+            <h2 id="panel-ticker" class="text-xl font-black text-white tracking-tight mb-1">---</h2>
+            <div id="panel-precio" class="text-4xl font-extrabold tabular-nums tracking-tighter mb-2">$--</div>
+            <div id="panel-var" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-navy-deep border border-navy-border">
+              --
+            </div>
+          </div>
+        </div>
+
+        <!-- Tarjeta: Datos OHLCV (Último Día) -->
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 overflow-hidden">
+          <div class="bg-navy-deep/80 px-4 py-3 border-b border-navy-border/60 flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-ink-300">Resumen Diario</h3>
+            <i data-lucide="bar-chart-2" class="w-4 h-4 text-ink-500"></i>
+          </div>
+          <div class="p-4 flex flex-col gap-2">
+            <div class="flex justify-between items-center text-sm border-b border-navy-border/40 pb-2">
+              <span class="text-ink-500 font-medium">Apertura (O)</span>
+              <span id="dat-open" class="text-white font-semibold tabular-nums">--</span>
+            </div>
+            <div class="flex justify-between items-center text-sm border-b border-navy-border/40 pb-2">
+              <span class="text-ink-500 font-medium">Máximo (H)</span>
+              <span id="dat-high" class="text-mint font-semibold tabular-nums">--</span>
+            </div>
+            <div class="flex justify-between items-center text-sm border-b border-navy-border/40 pb-2">
+              <span class="text-ink-500 font-medium">Mínimo (L)</span>
+              <span id="dat-low" class="text-coral font-semibold tabular-nums">--</span>
+            </div>
+            <div class="flex justify-between items-center text-sm border-b border-navy-border/40 pb-2">
+              <span class="text-ink-500 font-medium">Cierre (C)</span>
+              <span id="dat-close" class="text-sky font-semibold tabular-nums">--</span>
+            </div>
+            <div class="flex justify-between items-center text-sm pt-1">
+              <span class="text-ink-500 font-medium">Volumen (V)</span>
+              <span id="dat-vol" class="text-white font-semibold tabular-nums">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tarjeta: Indicadores Calculados en Nb1 -->
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 overflow-hidden">
+          <div class="bg-navy-deep/80 px-4 py-3 border-b border-navy-border/60 flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-ink-300">Indicadores (API)</h3>
+            <i data-lucide="cpu" class="w-4 h-4 text-ink-500"></i>
+          </div>
+          <div class="p-4 flex flex-col gap-2">
+            <div class="flex justify-between items-center text-sm border-b border-navy-border/40 pb-2">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full bg-gold"></div>
+                <span class="text-ink-300 font-medium">SMA 20</span>
+              </div>
+              <span id="dat-sma20" class="text-white font-semibold tabular-nums">--</span>
+            </div>
+            <div class="flex justify-between items-center text-sm border-b border-navy-border/40 pb-2">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full bg-sky"></div>
+                <span class="text-ink-300 font-medium">SMA 50</span>
+              </div>
+              <span id="dat-sma50" class="text-white font-semibold tabular-nums">--</span>
+            </div>
+            <div class="flex justify-between items-center text-sm border-b border-navy-border/40 pb-2">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full bg-teal"></div>
+                <span class="text-ink-300 font-medium">EMA 12</span>
+              </div>
+              <span id="dat-ema12" class="text-white font-semibold tabular-nums">--</span>
+            </div>
+            <div class="flex justify-between items-center text-sm pt-1">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full bg-purple-500"></div>
+                <span class="text-ink-300 font-medium">RSI 14</span>
+              </div>
+              <span id="dat-rsi14" class="text-white font-semibold tabular-nums">--</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="border-t border-navy-border/60 bg-navy-deep/40 mt-auto">
+    <div class="max-w-7xl mx-auto px-6 py-6 text-sm text-ink-500 text-center">
+      Ernesto Investing AI — Datos servidos desde MongoDB a través de FastAPI
+    </div>
+  </footer>
+
+<script>
+lucide.createIcons();
+
+function getApiUrl(){ return sessionStorage.getItem('API_URL'); }
+
+function mostrarAviso(tipo, html){
+  const aviso = document.getElementById('aviso');
+  if(!html) { aviso.innerHTML = ''; return; }
+  
+  const estilos = {
+    info:  'bg-navy-card/80 text-ink-100 border-navy-border',
+    error: 'bg-coral/10 text-coral border-coral/30'
+  };
+  const icono = tipo === 'error' ? 'alert-triangle' : 'loader';
+  aviso.innerHTML = `
+    <div class="flex items-center gap-3 px-5 py-3.5 rounded-xl border text-sm shadow-sm ${estilos[tipo]}">
+      <i data-lucide="${icono}" class="w-5 h-5 shrink-0 ${tipo==='info' ? 'animate-spin text-teal' : ''}"></i>
+      <span>${html}</span>
+    </div>`;
+  lucide.createIcons();
+}
+
+// Formateadores de números
+const fNum = (n, dec=2) => (n !== null && n !== undefined) ? n.toFixed(dec) : '—';
+const fVol = (n) => {
+  if(!n) return '—';
+  if(n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if(n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n.toLocaleString('en-US');
+};
+
+async function cargarDatos(){
+  const apiUrl = getApiUrl();
+  const sel = document.getElementById('selTicker');
+  const ticker = sel.value;
+  const tickerNombre = sel.options[sel.selectedIndex].text.split(' — ')[1] || ticker;
+
+  if(!apiUrl){
+    mostrarAviso('error', 'No hay URL de API configurada. Vuelve al <a href="index.html" class="underline font-semibold hover:text-white">Portal</a> y conéctate.');
+    return;
+  }
+
+  mostrarAviso('info', `Consultando a la API: extrayendo histórico de <b>${ticker}</b> desde MongoDB...`);
+  
+  try {
+    // LLAMADA A LA API (Notebook 3)
+    const r = await fetch(`${apiUrl}/api/mercado/${ticker}`, { 
+      headers: { 'ngrok-skip-browser-warning': 'true' } 
+    });
+    
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    
+    // Renderizamos ambas vistas
+    actualizarPanelLateral(data.datos, ticker, tickerNombre);
+    renderizarGraficoPlotly(data);
+    
+    mostrarAviso(''); // Limpiar aviso si fue exitoso
+  } catch(e){
+    mostrarAviso('error', `<b>Error de conexión:</b> ${e.message}. Verifica que el <b>Notebook 3</b> esté ejecutándose y la URL de ngrok sea correcta.`);
+  }
+}
+
+function actualizarPanelLateral(datos, ticker, nombre) {
+  if (!datos || datos.length === 0) return;
+  
+  // Extraer el último dato (hoy) y el penúltimo (ayer)
+  const hoy = datos[datos.length - 1];
+  const ayer = datos.length > 1 ? datos[datos.length - 2] : hoy;
+
+  // Calcular Variación
+  const varAbs = hoy.close - ayer.close;
+  const varPct = (varAbs / ayer.close) * 100;
+  const alcista = varAbs >= 0;
+
+  // 1. Cotización Actual
+  document.getElementById('panel-ticker').textContent = ticker;
+  document.getElementById('panel-precio').textContent = `$${fNum(hoy.close)}`;
+  
+  const elVar = document.getElementById('panel-var');
+  elVar.textContent = `${alcista ? '+' : ''}${fNum(varPct)}%`;
+  elVar.className = `inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold border ${alcista ? 'bg-mint/10 text-mint border-mint/20' : 'bg-coral/10 text-coral border-coral/20'}`;
+
+  // Fecha en la cabecera del gráfico
+  document.getElementById('badge-fecha').textContent = `Último cierre: ${hoy.fecha}`;
+
+  // 2. Datos OHLCV
+  document.getElementById('dat-open').textContent = `$${fNum(hoy.open)}`;
+  document.getElementById('dat-high').textContent = `$${fNum(hoy.high)}`;
+  document.getElementById('dat-low').textContent  = `$${fNum(hoy.low)}`;
+  document.getElementById('dat-close').textContent= `$${fNum(hoy.close)}`;
+  document.getElementById('dat-vol').textContent  = fVol(hoy.volume);
+
+  // 3. Indicadores (provenientes directamente de la BD poblada por el Notebook 1)
+  document.getElementById('dat-sma20').textContent = fNum(hoy.sma_20);
+  document.getElementById('dat-sma50').textContent = fNum(hoy.sma_50);
+  document.getElementById('dat-ema12').textContent = fNum(hoy.ema_12);
+  document.getElementById('dat-rsi14').textContent = fNum(hoy.rsi_14);
+}
+
+function renderizarGraficoPlotly(data){
+  const d = data.datos;
+  const f = d.map(x => x.fecha);
+  
+  // Colores para el volumen (Verde si cierra arriba de apertura, Rojo si cierra abajo)
+  const volColors = d.map(x => (x.close >= x.open) ? 'rgba(74, 222, 128, 0.4)' : 'rgba(239, 83, 80, 0.4)');
+
+  const trazas = [
+    // Velas Japonesas
+    { 
+      type: 'candlestick', name: data.ticker,
+      x: f, open: d.map(x=>x.open), high: d.map(x=>x.high), low: d.map(x=>x.low), close: d.map(x=>x.close),
+      increasing: { line: { color: '#4ADE80', width: 1.5 }, fillcolor: '#4ADE80' }, 
+      decreasing: { line: { color: '#EF5350', width: 1.5 }, fillcolor: '#EF5350' }, 
+      yaxis: 'y'
+    },
+    // SMA 20
+    { 
+      type: 'scatter', mode: 'lines', name: 'SMA 20',
+      x: f, y: d.map(x=>x.sma_20), 
+      line: { color: '#C5961A', width: 1.5 }, yaxis: 'y' 
+    },
+    // SMA 50
+    { 
+      type: 'scatter', mode: 'lines', name: 'SMA 50',
+      x: f, y: d.map(x=>x.sma_50), 
+      line: { color: '#3B82F6', width: 1.5 }, yaxis: 'y' 
+    },
+    // EMA 12 (Opcional, para darle más aspecto "Pro")
+    { 
+      type: 'scatter', mode: 'lines', name: 'EMA 12',
+      x: f, y: d.map(x=>x.ema_12), 
+      line: { color: '#26A69A', width: 1.5, dash: 'dot' }, yaxis: 'y', visible: 'legendonly' 
+    },
+    // Subgráfico de Volumen
+    { 
+      type: 'bar', name: 'Volumen',
+      x: f, y: d.map(x=>x.volume), 
+      marker: { color: volColors, line: { width: 0 } }, 
+      yaxis: 'y2', showlegend: false 
+    }
+  ];
+
+  const layout = {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { color: '#9FB0CE', family: 'Inter, sans-serif' },
+    margin: { t: 10, b: 30, l: 50, r: 20 },
+    hovermode: 'x unified',
+    dragmode: 'zoom',
+    
+    // Eje X: Fechas
+    xaxis: { 
+      rangeslider: { visible: false }, 
+      gridcolor: '#1F3864', linecolor: '#1F3864',
+      tickfont: { size: 10 }, type: 'date'
+    },
+    
+    // Eje Y principal: Precios (Ocupa el 75% superior)
+    yaxis: { 
+      domain: [0.25, 1], title: 'Precio (USD)', 
+      gridcolor: '#1F3864', linecolor: '#1F3864',
+      tickprefix: '$', tickfont: { size: 11 }
+    },
+    
+    // Eje Y Secundario: Volumen (Ocupa el 20% inferior)
+    yaxis2: { 
+      domain: [0, 0.20], 
+      gridcolor: 'transparent', linecolor: '#1F3864',
+      showticklabels: false 
+    },
+    
+    // Leyenda en la parte superior horizontal
+    legend: { 
+      orientation: 'h', x: 0, y: 1.02, 
+      font: { size: 11 }, bgcolor: 'transparent'
+    }
+  };
+
+  const config = { responsive: true, displayModeBar: false };
+  
+  Plotly.react('grafico', trazas, layout, config);
+}
+
+// Cargar al iniciar
+window.addEventListener('DOMContentLoaded', cargarDatos);
+</script>
+</body>
+</html>
