@@ -71,7 +71,7 @@
         </div>
       </div>
       <nav class="flex flex-wrap gap-2">
-        <a href="index.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border text-ink-300 text-sm hover:border-teal/60 hover:text-teal transition-colors">
+        <a href="home.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border text-ink-300 text-sm hover:border-teal/60 hover:text-teal transition-colors">
           <i data-lucide="home" class="w-4 h-4"></i> Portal
         </a>
         <a href="modulo_svc.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border text-ink-300 text-sm hover:border-mint/60 hover:text-mint transition-colors">
@@ -262,7 +262,7 @@ async function cargarDatos(){
   const ticker = sel.value;
 
   if(!apiUrl){
-    mostrarAviso('error', 'No hay URL de API configurada. Vuelve al <a href="index.html" class="underline font-semibold hover:text-white">Portal</a> y conéctate.');
+    mostrarAviso('error', 'No hay URL de API configurada. Vuelve al <a href="home.html" class="underline font-semibold hover:text-white">Portal</a> y conéctate.');
     return;
   }
 
@@ -339,9 +339,9 @@ async function cargarMercadoRapido(apiUrl) {
   const resultados = await Promise.all(promesas);
   let html = '';
 
-  resultados.forEach((res, index) => {
+  resultados.forEach((res, home) => {
     if(!res || res.datos.length < 2) return;
-    const tk = tickers[index];
+    const tk = tickers[home];
     const datos = res.datos;
     const hoy = datos[datos.length - 1];
     const ayer = datos[datos.length - 2];
