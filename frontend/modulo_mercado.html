@@ -160,7 +160,6 @@
           <div class="p-5 flex flex-col items-center">
             <div class="flex justify-center gap-4 mb-3">
               <div class="sdot" id="dot-buy">🟢</div>
-              <div class="sdot" id="dot-hold">🟡</div>
               <div class="sdot" id="dot-sell">🔴</div>
             </div>
             <div id="senal-tit" class="text-lg font-black tracking-wide mb-1 text-ink-300">CARGANDO...</div>
@@ -293,12 +292,11 @@ async function cargarDatos(){
 
 async function fetchSVCData(ticker, apiUrl) {
   const dotB = document.getElementById('dot-buy');
-  const dotH = document.getElementById('dot-hold');
   const dotS = document.getElementById('dot-sell');
   const tit = document.getElementById('senal-tit');
   const desc = document.getElementById('senal-desc');
 
-  dotB.className = 'sdot'; dotH.className = 'sdot'; dotS.className = 'sdot';
+  dotB.className = 'sdot'; dotS.className = 'sdot';
   tit.textContent = "CONSULTANDO..."; tit.className = "text-lg font-black tracking-wide mb-1 text-ink-500";
   desc.textContent = "Obteniendo datos del modelo...";
 
@@ -322,8 +320,7 @@ async function fetchSVCData(ticker, apiUrl) {
     desc.innerHTML = `Confianza del modelo: <b class="text-white">${(conf*100).toFixed(1)}%</b><br>Precisión histórica (Acc): <b class="text-white">${(acc*100).toFixed(1)}%</b>`;
 
   } catch(e) {
-    dotH.classList.add('hold');
-    tit.textContent = "HOLD (SIN DATOS)"; tit.classList.replace('text-ink-500', 'text-gold');
+    tit.textContent = "SIN DATOS"; tit.classList.replace('text-ink-500', 'text-gold');
     desc.textContent = "No se encontraron predicciones en la base de datos para este ticker.";
   }
 }
