@@ -752,20 +752,27 @@
 
   <script>
     /* =========================================================
-       CLIENTE SUPABASE
+       CLIENTE SUPABASE (CON MANEJO DE ERRORES)
        ========================================================= */
-    // Nota: la URL base del proyecto NO incluye "/rest/v1/";
-    // el SDK arma esa ruta internamente al hacer llamadas.
     const SUPABASE_URL = 'https://wfplmsfjhwwzeroigkkn.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmcGxtc2ZqaHd3emVyb2lna2tuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MjE1NDIsImV4cCI6MjA5OTI5NzU0Mn0.1lWINOh_xWtVgXHvhK7YrfBiAunXbpKvsnCZOUXdiUs';
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let supabase = null;
+
+    // Protegemos la inicialización para que, si el CDN es bloqueado, la interfaz siga funcionando
+    try {
+      if (window.supabase) {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      } else {
+        console.warn("Advertencia: El script de Supabase no pudo cargar (posible bloqueador de anuncios).");
+      }
+    } catch (error) {
+      console.error("Error al inicializar Supabase:", error);
+    }
 
     /* =========================================================
        NAVEGACIÓN ENTRE PANTALLAS
        ========================================================= */
-
-    // Mapa de IDs de pantalla
     const PANTALLAS = {
       login:    'pantalla-login',
       registro: 'pantalla-registro',
@@ -774,48 +781,35 @@
 
     let pantallaActual = 'login';
 
-    /**
-     * Navega a la pantalla indicada con transición suave.
-     * @param {string} destino - clave de PANTALLAS
-     */
     function irA(destino) {
       if (destino === pantallaActual) return;
 
       const elActual  = document.getElementById(PANTALLAS[pantallaActual]);
       const elDestino = document.getElementById(PANTALLAS[destino]);
 
-      // Ocultar pantalla actual
       elActual.classList.remove('activa');
       elActual.classList.add('salir-izq');
 
-      // Mostrar destino tras breve retardo para que se vea la transición
       setTimeout(() => {
         elActual.classList.remove('salir-izq');
         elDestino.classList.add('activa');
         pantallaActual = destino;
-
-        // Hacer scroll al inicio de la tarjeta en mobile
         document.getElementById('tarjeta').scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 280);
     }
 
-
     /* =========================================================
        UTILIDADES DE VALIDACIÓN
        ========================================================= */
-
-    /** Valida formato de email */
     function esEmailValido(email) {
       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
     }
 
-    /** Marca un campo como inválido y muestra mensaje */
     function marcarInvalido(inputId, errId) {
       document.getElementById(inputId).classList.add('invalido');
       document.getElementById(errId).classList.add('visible');
     }
 
-    /** Limpia el estado de error de un campo */
     function limpiarError(inputId, errId) {
       const input = document.getElementById(inputId);
       if (input) {
@@ -824,7 +818,6 @@
       }
     }
 
-    /** Muestra/oculta contraseña */
     function togglePass(inputId, btn) {
       const input = document.getElementById(inputId);
       if (input.type === 'password') {
@@ -838,18 +831,23 @@
       }
     }
 
-    /** Simula estado de carga en un botón */
-    function simularCarga(btnId, ms, callback) {
+    // FUNCIÓN MEJORADA: Ahora el botón seguirá girando hasta que Supabase responda
+    async function simularCarga(btnId, ms, callback) {
       const btn = document.getElementById(btnId);
       btn.classList.add('cargando');
       btn.disabled = true;
-      setTimeout(() => {
-        btn.classList.remove('cargando');
-        btn.disabled = false;
-        if (callback) callback();
-      }, ms);
+      
+      // Pequeño retardo visual inicial
+      await new Promise(resolve => setTimeout(resolve, ms));
+      
+      if (callback) {
+        await callback();
+      }
+      
+      // Devuelve el botón a la normalidad solo cuando todo termina
+      btn.classList.remove('cargando');
+      btn.disabled = false;
     }
-
 
     /* =========================================================
        FORTALEZA DE CONTRASEÑA
@@ -903,7 +901,10 @@
 
     function iniciarSesion() {
       let valido = true;
-
+      if (!supabase) {
+        alert("❌ Error: No se pudo conectar con el servidor. Por favor, desactiva tu bloqueador de anuncios o revisa tu conexión a internet.");
+        return;
+      }
       const email = document.getElementById('login-email').value;
       const pass  = document.getElementById('login-pass').value;
 
@@ -955,7 +956,10 @@
 
     function crearCuenta() {
       let valido = true;
-
+      if (!supabase) {
+        alert("❌ Error: No se pudo conectar con el servidor. Por favor, desactiva tu bloqueador de anuncios o revisa tu conexión a internet.");
+        return;
+      }
       const nombre   = document.getElementById('reg-nombre').value;
       const email    = document.getElementById('reg-email').value;
       const pass     = document.getElementById('reg-pass').value;
@@ -1032,6 +1036,12 @@
        ========================================================= */
 
     function enviarEnlace() {
+      // AQUÍ VA LA PROTECCIÓN: Lo primero que hacemos es verificar la conexión
+      if (!supabase) {
+        alert("❌ Error: No se pudo conectar con el servidor. Por favor, desactiva tu bloqueador de anuncios o revisa tu conexión a internet.");
+        return;
+      }
+
       const email = document.getElementById('rec-email').value;
 
       limpiarError('rec-email', 'err-rec-email');
