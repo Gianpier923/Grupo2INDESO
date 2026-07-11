@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InvestAI | Autenticación</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy: { deep: '#0A1428', base: '#0D1B33', card: '#122548', border: '#1F3864' },
+            teal: '#26A69A',
+            mint: '#4ADE80',
+            gold: '#C5961A',
+            sky:  '#3B82F6',
+            coral: '#EF5350',
+            ink: { 100: '#E2E8F3', 300: '#9FB0CE', 500: '#6B7A99' }
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+        }
+      }
+    };
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* Estilos globales y utilidades personalizadas */
+    body {
+      background-image: 
+        radial-gradient(circle at 15% 50%, rgba(38, 166, 154, 0.04), transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(197, 150, 26, 0.04), transparent 25%);
+    }
+    
+    a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid #4ADE80; outline-offset: 2px; border-radius: 0.5rem; }
+    ::selection { background: #26A69A; color: #0A1428; }
+
+    /* Transiciones de pantallas */
+    .pantallas-wrapper {
+      position: relative;
+      overflow: hidden;
+    }
+    .pantalla {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      opacity: 0;
+      transform: translateX(30px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: none;
+      visibility: hidden;
+    }
+    .pantalla.activa {
+      position: relative;
+      opacity: 1;
+      transform: translateX(0);
+      pointer-events: auto;
+      visibility: visible;
+    }
+    .pantalla.salir-izq {
+      position: absolute;
+      opacity: 0;
+      transform: translateX(-30px);
+      pointer-events: none;
+      visibility: hidden;
+    }
+
+    /* Estados de validación */
+    input.invalido {
+      border-color: #EF5350 !important;
+      background-color: rgba(239, 83, 80, 0.05);
+    }
+    
+    /* Indicador de carga */
+    .btn-cargando .texto-btn { display: none; }
+    .btn-cargando .spinner { display: inline-block; }
+  </style>
+</head>
+<body class="bg-navy-base text-ink-100 font-sans antialiased min-h-screen flex items-center justify-center p-4 sm:p-6">
+
+  <div class="w-full max-w-md bg-navy-card/80 border border-navy-border shadow-2xl rounded-2xl p-6 sm:p-8 backdrop-blur-sm relative z-10 pantallas-wrapper">
+    
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center gap-3">
+        <svg width="40" height="40" viewBox="0 0 44 44" class="shrink-0 drop-shadow-md" role="img" aria-label="Logo InvestAI">
+          <rect width="44" height="44" rx="12" fill="#122548"/>
+          <line x1="14" y1="10" x2="14" y2="34" stroke="#26A69A" stroke-width="2"/>
+          <rect x="10" y="16" width="8" height="10" rx="1.5" fill="#26A69A"/>
+          <line x1="22" y1="6" x2="22" y2="30" stroke="#4ADE80" stroke-width="2"/>
+          <rect x="18" y="13" width="8" height="11" rx="1.5" fill="#4ADE80"/>
+          <line x1="30" y1="14" x2="30" y2="38" stroke="#C5961A" stroke-width="2"/>
+          <rect x="26" y="20" width="8" height="9" rx="1.5" fill="#C5961A"/>
+        </svg>
+        <h1 class="text-3xl font-extrabold tracking-tight text-white">InvestAI</h1>
+      </div>
+    </div>
+
+    <div id="pantalla-login" class="pantalla activa">
+      <div class="text-center mb-6">
+        <h2 class="text-xl font-bold text-white mb-1">Bienvenido de nuevo</h2>
+        <p class="text-sm text-ink-300">Ingresa a tu cuenta para continuar</p>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-ink-300 mb-1.5 uppercase tracking-wider">Correo Electrónico</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-ink-500">
+              <i data-lucide="mail" class="w-4 h-4"></i>
+            </div>
+            <input type="email" id="login-email" class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-navy-deep border border-navy-border text-ink-100 text-sm placeholder:text-ink-500 focus:border-teal outline-none transition-colors" placeholder="correo@ejemplo.com">
+          </div>
+          <p id="err-login-email" class="hidden text-xs text-coral mt-1.5 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Ingresa un correo válido</p>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-semibold text-ink-300 uppercase tracking-wider">Contraseña</label>
+            <button onclick="irA('recuperar')" class="text-xs font-medium text-teal hover:text-mint transition-colors">¿Olvidaste tu contraseña?</button>
+          </div>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-ink-500">
+              <i data-lucide="lock" class="w-4 h-4"></i>
+            </div>
+            <input type="password" id="login-pass" class="w-full pl-10 pr-10 py-2.5 rounded-xl bg-navy-deep border border-navy-border text-ink-100 text-sm placeholder:text-ink-500 focus:border-teal outline-none transition-colors" placeholder="••••••••">
+            <button type="button" onclick="togglePass('login-pass', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-ink-500 hover:text-ink-100 transition-colors">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <p id="err-login-pass" class="hidden text-xs text-coral mt-1.5 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Ingresa tu contraseña</p>
+        </div>
+
+        <button id="btn-login" onclick="iniciarSesion()" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 mt-2 rounded-xl bg-teal text-navy-deep font-bold hover:bg-mint transition-all shadow-lg shadow-teal/10 disabled:opacity-70 disabled:cursor-not-allowed">
+          <span class="texto-btn">Iniciar Sesión</span>
+          <i data-lucide="arrow-right" class="w-4 h-4 texto-btn"></i>
+          <i data-lucide="loader-2" class="w-5 h-5 animate-spin spinner hidden"></i>
+        </button>
+
+        <div class="text-center mt-6">
+          <p class="text-sm text-ink-300">
+            ¿No tienes cuenta? 
+            <button onclick="irA('registro')" class="font-semibold text-teal hover:text-mint transition-colors underline-offset-4 hover:underline">Regístrate</button>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div id="pantalla-registro" class="pantalla">
+      <div class="text-center mb-6">
+        <h2 class="text-xl font-bold text-white mb-1">Crear Cuenta</h2>
+        <p class="text-sm text-ink-300">Únete a InvestAI y optimiza tus inversiones</p>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-ink-300 mb-1.5 uppercase tracking-wider">Nombre Completo</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-ink-500">
+              <i data-lucide="user" class="w-4 h-4"></i>
+            </div>
+            <input type="text" id="reg-nombre" class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-navy-deep border border-navy-border text-ink-100 text-sm placeholder:text-ink-500 focus:border-teal outline-none transition-colors" placeholder="Ej. Juan Pérez">
+          </div>
+          <p id="err-reg-nombre" class="hidden text-xs text-coral mt-1.5 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Mínimo 3 caracteres</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-ink-300 mb-1.5 uppercase tracking-wider">Correo Electrónico</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-ink-500">
+              <i data-lucide="mail" class="w-4 h-4"></i>
+            </div>
+            <input type="email" id="reg-email" class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-navy-deep border border-navy-border text-ink-100 text-sm placeholder:text-ink-500 focus:border-teal outline-none transition-colors" placeholder="correo@ejemplo.com">
+          </div>
+          <p id="err-reg-email" class="hidden text-xs text-coral mt-1.5 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Ingresa un correo válido</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-ink-300 mb-1.5 uppercase tracking-wider">Contraseña</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-ink-500">
+              <i data-lucide="lock" class="w-4 h-4"></i>
+            </div>
+            <input type="password" id="reg-pass" class="w-full pl-10 pr-10 py-2.5 rounded-xl bg-navy-deep border border-navy-border text-ink-100 text-sm placeholder:text-ink-500 focus:border-teal outline-none transition-colors" placeholder="Mínimo 8 caracteres" oninput="evaluarFortaleza(this.value)">
+            <button type="button" onclick="togglePass('reg-pass', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-ink-500 hover:text-ink-100 transition-colors">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <div class="flex gap-1.5 mt-2">
+            <div id="fb1" class="h-1 flex-1 rounded-full bg-navy-border transition-colors"></div>
+            <div id="fb2" class="h-1 flex-1 rounded-full bg-navy-border transition-colors"></div>
+            <div id="fb3" class="h-1 flex-1 rounded-full bg-navy-border transition-colors"></div>
+            <div id="fb4" class="h-1 flex-1 rounded-full bg-navy-border transition-colors"></div>
+          </div>
+          <p id="err-reg-pass" class="hidden text-xs text-coral mt-1.5 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Mínimo 8 caracteres</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-ink-300 mb-1.5 uppercase tracking-wider">Confirmar Contraseña</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-ink-500">
+              <i data-lucide="lock" class="w-4 h-4"></i>
+            </div>
+            <input type="password" id="reg-confirm" class="w-full pl-10 pr-10 py-2.5 rounded-xl bg-navy-deep border border-navy-border text-ink-100 text-sm placeholder:text-ink-500 focus:border-teal outline-none transition-colors" placeholder="Repite tu contraseña">
+          </div>
+          <p id="err-reg-confirm" class="hidden text-xs text-coral mt-1.5 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Las contraseñas no coinciden</p>
+        </div>
+
+        <button id="btn-registro" onclick="crearCuenta()" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 mt-4 rounded-xl bg-teal text-navy-deep font-bold hover:bg-mint transition-all shadow-lg shadow-teal/10 disabled:opacity-70 disabled:cursor-not-allowed">
+          <span class="texto-btn">Crear Cuenta</span>
+          <i data-lucide="user-plus" class="w-4 h-4 texto-btn"></i>
+          <i data-lucide="loader-2" class="w-5 h-5 animate-spin spinner hidden"></i>
+        </button>
+
+        <div class="text-center mt-6">
+          <p class="text-sm text-ink-300">
+            ¿Ya tienes cuenta? 
+            <button onclick="irA('login')" class="font-semibold text-teal hover:text-mint transition-colors underline-offset-4 hover:underline">Inicia sesión</button>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div id="pantalla-recuperar" class="pantalla">
+      <div class="text-center mb-6">
+        <h2 class="text-xl font-bold text-white mb-1">Recuperar Contraseña</h2>
+        <p class="text-sm text-ink-300">Te enviaremos un enlace para restablecerla</p>
+      </div>
+
+      <div id="banner-enviado" class="hidden mb-6 p-4 rounded-xl bg-mint/10 border border-mint/30 text-center">
+        <i data-lucide="check-circle-2" class="w-8 h-8 text-mint mx-auto mb-2"></i>
+        <h3 class="text-mint font-bold text-sm mb-1">¡Enlace enviado!</h3>
+        <p class="text-ink-300 text-xs">Revisa tu bandeja de entrada o spam y sigue las instrucciones.</p>
+      </div>
+
+      <div class="space-y-4" id="c-rec-email">
+        <div>
+          <label class="block text-xs font-semibold text-ink-300 mb-1.5 uppercase tracking-wider">Correo Electrónico</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-ink-500">
+              <i data-lucide="mail" class="w-4 h-4"></i>
+            </div>
+            <input type="email" id="rec-email" class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-navy-deep border border-navy-border text-ink-100 text-sm placeholder:text-ink-500 focus:border-teal outline-none transition-colors" placeholder="correo@ejemplo.com">
+          </div>
+          <p id="err-rec-email" class="hidden text-xs text-coral mt-1.5 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Ingresa un correo válido</p>
+        </div>
+      </div>
+
+      <button id="btn-recuperar" onclick="enviarEnlace()" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 mt-6 rounded-xl bg-teal text-navy-deep font-bold hover:bg-mint transition-all shadow-lg shadow-teal/10 disabled:opacity-70 disabled:cursor-not-allowed">
+        <span class="texto-btn">Enviar Enlace</span>
+        <i data-lucide="send" class="w-4 h-4 texto-btn"></i>
+        <i data-lucide="loader-2" class="w-5 h-5 animate-spin spinner hidden"></i>
+      </button>
+
+      <div class="text-center mt-6">
+        <button onclick="irA('login')" class="inline-flex items-center gap-1.5 font-semibold text-ink-300 hover:text-white transition-colors text-sm">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          Volver al inicio de sesión
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Iniciar íconos Lucide
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) lucide.createIcons();
+    });
+
+    /* =========================================================
+       CLIENTE SUPABASE (CON MANEJO DE ERRORES)
+       ========================================================= */
+    const SUPABASE_URL = 'https://wfplmsfjhwwzeroigkkn.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmcGxtc2ZqaHd3emVyb2lna2tuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MjE1NDIsImV4cCI6MjA5OTI5NzU0Mn0.1lWINOh_xWtVgXHvhK7YrfBiAunXbpKvsnCZOUXdiUs';
+
+    let supabaseClient = null;
+
+    try {
+      if (window.supabase) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      } else {
+        console.warn("Advertencia: El script de Supabase no pudo cargar.");
+      }
+    } catch (error) {
+      console.error("Error al inicializar Supabase:", error);
+    }
+
+    /* =========================================================
+       NAVEGACIÓN ENTRE PANTALLAS
+       ========================================================= */
+    const PANTALLAS = {
+      login:    'pantalla-login',
+      registro: 'pantalla-registro',
+      recuperar:'pantalla-recuperar'
+    };
+
+    let pantallaActual = 'login';
+
+    function irA(destino) {
+      if (destino === pantallaActual) return;
+
+      const elActual  = document.getElementById(PANTALLAS[pantallaActual]);
+      const elDestino = document.getElementById(PANTALLAS[destino]);
+
+      elActual.classList.remove('activa');
+      elActual.classList.add('salir-izq');
+
+      setTimeout(() => {
+        elActual.classList.remove('salir-izq');
+        elDestino.classList.add('activa');
+        pantallaActual = destino;
+      }, 300);
+    }
+
+    /* =========================================================
+       UTILIDADES DE VALIDACIÓN
+       ========================================================= */
+    function esEmailValido(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    }
+
+    function marcarInvalido(inputId, errId) {
+      document.getElementById(inputId).classList.add('invalido');
+      document.getElementById(errId).classList.remove('hidden');
+    }
+
+    function limpiarError(inputId, errId) {
+      const input = document.getElementById(inputId);
+      if (input) {
+        input.classList.remove('invalido');
+        document.getElementById(errId).classList.add('hidden');
+      }
+    }
+
+    function togglePass(inputId, btn) {
+      const input = document.getElementById(inputId);
+      const icon = btn.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
+    async function simularCarga(btnId, ms, callback) {
+      const btn = document.getElementById(btnId);
+      btn.classList.add('btn-cargando');
+      btn.disabled = true;
+      
+      await new Promise(resolve => setTimeout(resolve, ms));
+      
+      if (callback) {
+        await callback();
+      }
+      
+      btn.classList.remove('btn-cargando');
+      btn.disabled = false;
+    }
+
+    /* =========================================================
+       FORTALEZA DE CONTRASEÑA
+       ========================================================= */
+    function evaluarFortaleza(pass) {
+      const criterios = [
+        pass.length >= 8,
+        /[A-Z]/.test(pass),
+        /[0-9]/.test(pass),
+        /[^A-Za-z0-9]/.test(pass)
+      ];
+      const nivel = criterios.filter(Boolean).length;
+
+      const colores = ['#EF5350', '#F59E0B', '#10B981', '#4ADE80']; 
+      const barras  = ['fb1','fb2','fb3','fb4'];
+
+      barras.forEach((id, i) => {
+        const barra = document.getElementById(id);
+        if(barra) {
+          barra.style.backgroundColor = i < nivel ? colores[nivel - 1] : '#1F3864'; 
+        }
+      });
+    }
+
+    /* =========================================================
+       LÓGICA DE PANTALLAS
+       ========================================================= */
+    function iniciarSesion() {
+      let valido = true;
+      if (!supabaseClient) {
+        alert("❌ Error: No se pudo conectar con el servidor. Verifica tu conexión.");
+        return;
+      }
+      const email = document.getElementById('login-email').value;
+      const pass  = document.getElementById('login-pass').value;
+
+      limpiarError('login-email', 'err-login-email');
+      limpiarError('login-pass',  'err-login-pass');
+
+      if (!esEmailValido(email)) {
+        marcarInvalido('login-email', 'err-login-email');
+        valido = false;
+      }
+
+      if (pass.trim() === '') {
+        marcarInvalido('login-pass', 'err-login-pass');
+        valido = false;
+      }
+
+      if (!valido) return;
+
+      simularCarga('btn-login', 800, async () => {
+        try {
+          const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email: email,
+            password: pass
+          });
+
+          if (error) throw error;
+          window.location.href = 'home.html';
+        } catch (error) {
+          alert(`❌ Error al iniciar sesión: ${error.message}`);
+        }
+      });
+    }
+
+    function crearCuenta() {
+      let valido = true;
+      if (!supabaseClient) {
+        alert("❌ Error: No se pudo conectar con el servidor.");
+        return;
+      }
+      const nombre   = document.getElementById('reg-nombre').value;
+      const email    = document.getElementById('reg-email').value;
+      const pass     = document.getElementById('reg-pass').value;
+      const confirm  = document.getElementById('reg-confirm').value;
+
+      ['reg-nombre','reg-email','reg-pass','reg-confirm'].forEach((id, i) => {
+        limpiarError(id, ['err-reg-nombre','err-reg-email','err-reg-pass','err-reg-confirm'][i]);
+      });
+
+      if (nombre.trim().length < 3) {
+        marcarInvalido('reg-nombre', 'err-reg-nombre');
+        valido = false;
+      }
+
+      if (!esEmailValido(email)) {
+        marcarInvalido('reg-email', 'err-reg-email');
+        valido = false;
+      }
+
+      if (pass.length < 8) {
+        marcarInvalido('reg-pass', 'err-reg-pass');
+        valido = false;
+      }
+
+      if (confirm !== pass || confirm === '') {
+        marcarInvalido('reg-confirm', 'err-reg-confirm');
+        valido = false;
+      }
+
+      if (!valido) return;
+
+      simularCarga('btn-registro', 1000, async () => {
+        try {
+          const { data, error } = await supabaseClient.auth.signUp({
+            email: email,
+            password: pass,
+            options: {
+              data: {
+                nombre: nombre
+              }
+            }
+          });
+
+          if (error) throw error;
+
+          alert('🎉 Cuenta creada exitosamente.\n\nAhora puedes iniciar sesión.');
+          irA('login');
+        } catch (error) {
+          alert(`❌ Error al crear cuenta: ${error.message}`);
+        }
+      });
+    }
+
+    function enviarEnlace() {
+      if (!supabaseClient) {
+        alert("❌ Error: No se pudo conectar con el servidor.");
+        return;
+      }
+
+      const email = document.getElementById('rec-email').value;
+
+      limpiarError('rec-email', 'err-rec-email');
+      document.getElementById('banner-enviado').classList.add('hidden');
+
+      if (!esEmailValido(email)) {
+        marcarInvalido('rec-email', 'err-rec-email');
+        return;
+      }
+
+      simularCarga('btn-recuperar', 800, async () => {
+        try {
+          const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email);
+
+          if (error) throw error;
+
+          document.getElementById('c-rec-email').style.display    = 'none';
+          document.getElementById('btn-recuperar').style.display  = 'none';
+          document.getElementById('banner-enviado').classList.remove('hidden');
+        } catch (error) {
+          alert(`❌ Error: ${error.message}`);
+        }
+      });
+    }
+
+    /* =========================================================
+       LIMPIAR ERRORES AL ESCRIBIR Y EVENTOS
+       ========================================================= */
+    document.addEventListener('DOMContentLoaded', () => {
+      const pares = [
+        ['login-email',  'err-login-email'],
+        ['login-pass',   'err-login-pass'],
+        ['reg-nombre',   'err-reg-nombre'],
+        ['reg-email',    'err-reg-email'],
+        ['reg-pass',     'err-reg-pass'],
+        ['reg-confirm',  'err-reg-confirm'],
+        ['rec-email',    'err-rec-email'],
+      ];
+
+      pares.forEach(([inputId, errId]) => {
+        const el = document.getElementById(inputId);
+        if (el) el.addEventListener('input', () => limpiarError(inputId, errId));
+      });
+      
+      // Enviar formulario de login con Enter
+      document.getElementById('pantalla-login').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          iniciarSesion();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
