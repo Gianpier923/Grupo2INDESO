@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InvestAI | Ejecución de Órdenes Broker</title>
+
+<!-- Fuentes -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: { deep: '#0A1428', base: '#0D1B33', card: '#122548', border: '#1F3864' },
+          teal: '#26A69A', mint: '#4ADE80', gold: '#C5961A', sky: '#3B82F6', coral: '#EF5350',
+          ink: { 100: '#E2E8F3', 300: '#9FB0CE', 500: '#6B7A99' }
+        },
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+      }
+    }
+  };
+</script>
+
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+  a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible {
+    outline: 2px solid #4ADE80;
+    outline-offset: 3px;
+    border-radius: 0.5rem;
+  }
+  ::selection { background: #26A69A; color: #0A1428; }
+
+  /* Ocultar input number arrows */
+  input[type=number]::-webkit-inner-spin-button, 
+  input[type=number]::-webkit-outer-spin-button { 
+    -webkit-appearance: none; margin: 0; 
+  }
+</style>
+</head>
+<body class="bg-navy-base text-ink-100 font-sans antialiased min-h-screen pb-10">
+
+  <!-- ============ HEADER ============ -->
+  <header class="border-b border-navy-border/60 bg-navy-deep/40">
+    <div class="max-w-5xl mx-auto px-6 py-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gold/15 text-gold flex items-center justify-center shrink-0">
+          <i data-lucide="briefcase" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white">InvestAI <span class="text-gold font-medium">Broker</span></h1>
+          <p class="text-sm text-ink-300">Módulo de Ejecución de Órdenes</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-4">
+        <!-- Indicador de IBKR -->
+        <div class="flex items-center gap-2 bg-navy-card/80 border border-navy-border py-2 px-3 rounded-xl">
+          <span id="semaforoIB" class="w-3 h-3 rounded-full bg-gold shadow-[0_0_8px_rgba(197,150,26,0.6)]"></span>
+          <select id="selectorModo" onchange="cambiarModoConexion()" class="bg-transparent text-ink-100 text-xs font-semibold outline-none focus:text-sky cursor-pointer">
+            <option value="paper" selected>Paper Trading</option>
+            <option value="conectado">Conectado (Live)</option>
+            <option value="desconectado">Desconectado</option>
+          </select>
+        </div>
+
+        <!-- Botón Portal (Como en modulo_svc) -->
+        <nav class="flex flex-wrap gap-2">
+          <a href="home.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border bg-navy-deep text-ink-300 text-sm hover:border-teal/60 hover:text-teal transition-colors">
+            <i data-lucide="home" class="w-4 h-4"></i> Portal
+          </a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ AVISOS Y ALERTAS ============ -->
+  <div class="max-w-3xl mx-auto px-6 mt-6 flex flex-col gap-3">
+    <div id="alertaPaper" class="bg-gold/10 border border-gold/30 text-gold px-4 py-3 rounded-xl flex items-center gap-3 text-sm">
+      <i data-lucide="alert-triangle" class="w-5 h-5 shrink-0"></i>
+      <span><strong>Modo Paper Trading:</strong> Las órdenes se ejecutarán de forma simulada.</span>
+    </div>
+    <!-- Contenedor dinámico de avisos API -->
+    <div id="aviso" class="empty:hidden"></div>
+  </div>
+
+  <!-- ============ CONTENIDO PRINCIPAL ============ -->
+  <main class="max-w-3xl mx-auto px-6 mt-6 flex flex-col gap-6">
+
+    <!-- FORMULARIO DE ORDEN -->
+    <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+      <div class="flex items-center gap-2 mb-5 border-b border-navy-border/60 pb-3">
+        <i data-lucide="clipboard-edit" class="w-4 h-4 text-sky"></i>
+        <h2 class="text-sm font-bold uppercase tracking-wide text-white">Parámetros de la Orden</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Columna Izquierda del Formulario -->
+        <div class="flex flex-col gap-4">
+          <!-- Ticker -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-semibold uppercase tracking-wide text-ink-300">Ticker</label>
+            <select id="ticker" onchange="cambioTicker()" class="px-4 py-3 rounded-xl bg-navy-deep border border-navy-border text-white text-sm focus:border-mint outline-none w-full">
+              <option value="BVN" selected>BVN — Buenaventura</option>
+              <option value="FSM">FSM — Fortuna Silver</option>
+              <option value="VOLCABC1.LM">VOLCABC1.LM — Volcan</option>
+              <option value="ABX.TO">ABX.TO — Barrick Gold</option>
+              <option value="BHP">BHP — BHP Group</option>
+            </select>
+          </div>
+
+          <!-- Lado -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-semibold uppercase tracking-wide text-ink-300">Lado de la Orden</label>
+            <div class="flex gap-2">
+              <button id="btnBuy" type="button" onclick="seleccionarLado('BUY')" class="flex-1 py-2 rounded-lg font-bold transition-colors bg-mint text-navy-deep border-2 border-mint">BUY</button>
+              <button id="btnSell" type="button" onclick="seleccionarLado('SELL')" class="flex-1 py-2 rounded-lg font-bold transition-colors bg-navy-deep text-ink-300 border border-navy-border hover:border-coral hover:text-coral">SELL</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Columna Derecha del Formulario -->
+        <div class="flex flex-col gap-4">
+          <!-- Tipo -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-semibold uppercase tracking-wide text-ink-300">Tipo de Orden</label>
+            <div class="flex gap-2" id="grupoTipoOrden">
+              <button type="button" onclick="seleccionarTipoOrden('Market', this)" class="tipo-btn flex-1 py-2 rounded-lg font-semibold text-sm transition-colors bg-sky text-white border border-sky">Market</button>
+              <button type="button" onclick="seleccionarTipoOrden('Limit', this)" class="tipo-btn flex-1 py-2 rounded-lg font-semibold text-sm transition-colors bg-navy-deep text-ink-300 border border-navy-border hover:bg-navy-border/50">Limit</button>
+              <button type="button" onclick="seleccionarTipoOrden('Stop', this)" class="tipo-btn flex-1 py-2 rounded-lg font-semibold text-sm transition-colors bg-navy-deep text-ink-300 border border-navy-border hover:bg-navy-border/50">Stop</button>
+            </div>
+          </div>
+
+          <!-- Cantidad y Precio (Flex Row) -->
+          <div class="flex gap-4">
+            <div class="flex flex-col gap-1.5 flex-1">
+              <label class="text-xs font-semibold uppercase tracking-wide text-ink-300">Cant.</label>
+              <input type="number" id="cantidad" min="1" step="1" value="100" oninput="actualizarVistaPrevia()" class="px-4 py-3 rounded-xl bg-navy-deep border border-navy-border text-white text-sm focus:border-sky outline-none w-full font-mono">
+              <span id="errorCantidad" class="text-coral text-[10px] hidden mt-0.5">Mínimo 1.</span>
+            </div>
+
+            <div id="campoPrecioLimite" class="flex flex-col gap-1.5 flex-1 hidden">
+              <label id="labelPrecio" class="text-xs font-semibold uppercase tracking-wide text-ink-300">Precio</label>
+              <input type="number" id="precioLimite" min="0" step="0.01" value="" oninput="actualizarVistaPrevia()" class="px-4 py-3 rounded-xl bg-navy-deep border border-navy-border text-white text-sm focus:border-sky outline-none w-full font-mono">
+              <span id="errorPrecio" class="text-coral text-[10px] hidden mt-0.5">Dato inválido.</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- VISTA PREVIA Y BOTÓN -->
+    <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6 flex flex-col md:flex-row gap-6 items-center">
+      
+      <div class="flex-1 w-full bg-navy-deep rounded-xl p-5 flex flex-col gap-3 text-sm border border-navy-border shadow-inner">
+        <div class="flex justify-between border-b border-navy-border/50 pb-2">
+          <span class="text-ink-300">Contrato</span>
+          <span id="prevContrato" class="font-bold text-white tracking-wide">BVN · STK · SMART</span>
+        </div>
+        <div class="flex justify-between border-b border-navy-border/50 pb-2">
+          <span class="text-ink-300">Detalle</span>
+          <span><span id="prevLado" class="font-bold text-mint">BUY</span> <span class="text-ink-500 mx-1">|</span> <span id="prevTipo" class="font-semibold text-white">MarketOrder</span></span>
+        </div>
+        <div class="flex justify-between border-b border-navy-border/50 pb-2">
+          <span class="text-ink-300">Precio Referencia (API)</span>
+          <span id="prevPrecio" class="font-mono text-white font-medium">$0.00</span>
+        </div>
+        <div class="flex justify-between pt-2 items-center">
+          <span class="font-bold text-ink-100 uppercase text-xs">Valor Estimado</span>
+          <span id="prevTotal" class="font-extrabold text-gold text-2xl font-mono">$0.00</span>
+        </div>
+      </div>
+
+      <div class="w-full md:w-1/3 flex flex-col justify-center h-full">
+        <button id="btnConfirmarInicial" onclick="abrirModalConfirmacion()" class="w-full h-full min-h-[100px] bg-gold hover:bg-gold/90 text-navy-deep font-extrabold text-base tracking-wide py-4 rounded-xl transition-all shadow-[0_4px_14px_rgba(197,150,26,0.25)] hover:shadow-[0_6px_20px_rgba(197,150,26,0.4)] flex flex-col items-center justify-center gap-2">
+          <i data-lucide="send" class="w-6 h-6"></i>
+          ENVIAR ORDEN
+        </button>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ============ MODAL DE CONFIRMACIÓN ============ -->
+  <div id="modalConfirmacion" class="fixed inset-0 z-50 hidden bg-navy-deep/80 backdrop-blur-sm items-center justify-center p-4 transition-opacity">
+    <div class="bg-navy-card border border-navy-border rounded-2xl w-full max-w-md shadow-2xl p-6 relative animate-[aparecer_0.2s_ease-out]">
+      <div class="flex items-center gap-3 mb-4 text-white border-b border-navy-border/50 pb-3">
+        <i data-lucide="shield-alert" class="w-6 h-6 text-gold"></i>
+        <h3 class="text-lg font-bold">Confirmar Transmisión</h3>
+      </div>
+      
+      <div class="bg-navy-deep rounded-xl p-4 text-sm mb-5 border border-navy-border font-mono">
+        <div class="flex justify-between py-1"><span class="text-ink-300 font-sans">Ticker:</span> <strong id="modalContrato" class="text-white">BVN</strong></div>
+        <div class="flex justify-between py-1"><span class="text-ink-300 font-sans">Acción:</span> <strong id="modalLado">BUY</strong></div>
+        <div class="flex justify-between py-1"><span class="text-ink-300 font-sans">Tipo:</span> <strong id="modalTipo" class="text-white">Market</strong></div>
+        <div class="flex justify-between py-1"><span class="text-ink-300 font-sans">Cantidad:</span> <strong id="modalCantidad" class="text-white">100</strong></div>
+        <div class="flex justify-between py-1 pt-3 mt-1 border-t border-navy-border/50"><span class="text-ink-300 font-sans uppercase text-xs font-bold mt-1">Total Obj:</span> <strong id="modalTotal" class="text-gold text-xl">$1,851.85</strong></div>
+      </div>
+
+      <label class="flex items-start gap-3 cursor-pointer bg-sky/10 border border-sky/20 p-3 rounded-lg mb-6">
+        <input type="checkbox" id="checkDobleVerificacion" onchange="validarCheckDoble()" class="mt-0.5 accent-sky w-4 h-4 rounded">
+        <span class="text-xs text-sky leading-snug font-medium">Confirmo que los datos son correctos y autorizo el envío de la orden (<span id="modalModo">Paper</span>).</span>
+      </label>
+
+      <div class="flex gap-3">
+        <button onclick="cerrarModal()" class="flex-1 py-3 rounded-xl font-semibold text-sm transition-colors border border-navy-border text-ink-300 hover:bg-navy-border/50">Cancelar</button>
+        <button id="btnConfirmarFinal" disabled onclick="ejecutarYDescargar()" class="flex-1 py-3 rounded-xl font-bold text-sm transition-colors bg-sky text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]">Transmitir al Broker</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TOAST NOTIFICACIÓN ============ -->
+  <div id="toastNotificacion" class="fixed bottom-6 right-6 px-5 py-3 rounded-xl font-medium text-sm shadow-xl flex items-center gap-3 transition-all duration-300 translate-y-24 opacity-0 z-50 max-w-sm">
+    <i id="toastIcono" data-lucide="info" class="w-5 h-5"></i>
+    <span id="toastMensaje">Notificación</span>
+  </div>
+
+<script>
+  lucide.createIcons();
+
+  /* ===== ESTADO Y VARIABLES GLOBALES ===== */
+  let estadoOrden = { ticker: 'BVN', lado: 'BUY', tipoOrden: 'Market', cantidad: 100, precioLimite: 0 };
+  const tasaComision = 0.001; // 0.1%
+  let precioActualAPI = 0;
+  let cargandoPrecio = false;
+
+  /* ===== LÓGICA DE LA API ===== */
+  function getApiUrl() {
+    return sessionStorage.getItem('API_URL');
+  }
+
+  function mostrarAviso(tipo, html, ocultar = false) {
+    const aviso = document.getElementById('aviso');
+    if (ocultar) {
+      aviso.innerHTML = '';
+      return;
+    }
+    const estilos = { info: 'bg-sky/10 text-sky border-sky/30', error: 'bg-coral/10 text-coral border-coral/30' };
+    const icono = tipo === 'error' ? 'alert-circle' : 'loader';
+    aviso.innerHTML = `
+      <div class="inline-flex items-start gap-2 px-4 py-3 rounded-xl border text-sm w-full ${estilos[tipo]}">
+        <i data-lucide="${icono}" class="w-4 h-4 mt-0.5 shrink-0 ${tipo === 'info' ? 'animate-spin' : ''}"></i>
+        <span>${html}</span>
+      </div>`;
+    lucide.createIcons();
+  }
+
+  async function cargarPrecioAPI(ticker) {
+    const apiUrl = getApiUrl();
+    
+    if (!apiUrl) {
+      mostrarAviso('error', 'No hay URL de API configurada. Vuelve al portal y verifica la conexión.');
+      precioActualAPI = 0;
+      actualizarVistaPrevia();
+      return;
+    }
+
+    cargandoPrecio = true;
+    actualizarVistaPrevia();
+    mostrarAviso('info', `Obteniendo cotización en tiempo real para ${ticker}...`);
+
+    try {
+      // Ajusta este endpoint según la estructura real de tu backend (ej: /api/data o /api/svc)
+      const res = await fetch(`${apiUrl}/api/data/${ticker}`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+      
+      if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+      const data = await res.json();
+      
+      // Asume que la API devuelve { "precio_actual": 18.50 } o { "close": 18.50 }
+      precioActualAPI = data.precio_actual || data.close || (data.data && data.data[data.data.length - 1].Close) || 0;
+      
+      if (precioActualAPI === 0) throw new Error("Precio no encontrado en el JSON");
+
+      mostrarAviso('info', '', true); // Ocultar aviso de éxito
+      
+      // Si el campo límite está vacío, lo llenamos con el precio actual sugerido
+      const inputLimite = document.getElementById('precioLimite');
+      if (!inputLimite.value) {
+        inputLimite.value = precioActualAPI.toFixed(2);
+      }
+
+    } catch (error) {
+      console.error(error);
+      mostrarAviso('error', `No se pudo obtener el precio de ${ticker}. Revisa el backend o tu conexión.`);
+      precioActualAPI = 0;
+    } finally {
+      cargandoPrecio = false;
+      actualizarVistaPrevia();
+    }
+  }
+
+  /* ===== INICIALIZACIÓN ===== */
+  document.addEventListener('DOMContentLoaded', () => {
+    cargarPrecioAPI(estadoOrden.ticker);
+  });
+
+  function cambioTicker() {
+    const ticker = document.getElementById('ticker').value;
+    estadoOrden.ticker = ticker;
+    document.getElementById('precioLimite').value = ''; // Resetear input sugerido
+    cargarPrecioAPI(ticker);
+  }
+
+  /* ===== LÓGICA DE INTERFAZ ===== */
+  function seleccionarLado(lado) {
+    estadoOrden.lado = lado;
+    const btnBuy = document.getElementById('btnBuy');
+    const btnSell = document.getElementById('btnSell');
+
+    if (lado === 'BUY') {
+      btnBuy.className = 'flex-1 py-2 rounded-lg font-bold transition-colors bg-mint text-navy-deep border-2 border-mint';
+      btnSell.className = 'flex-1 py-2 rounded-lg font-bold transition-colors bg-navy-deep text-ink-300 border border-navy-border hover:border-coral hover:text-coral';
+    } else {
+      btnBuy.className = 'flex-1 py-2 rounded-lg font-bold transition-colors bg-navy-deep text-ink-300 border border-navy-border hover:border-mint hover:text-mint';
+      btnSell.className = 'flex-1 py-2 rounded-lg font-bold transition-colors bg-coral text-white border-2 border-coral shadow-[0_0_12px_rgba(239,83,80,0.4)]';
+    }
+    actualizarVistaPrevia();
+  }
+
+  function seleccionarTipoOrden(tipo, btnEl) {
+    estadoOrden.tipoOrden = tipo;
+    
+    document.querySelectorAll('.tipo-btn').forEach(btn => {
+      btn.className = 'tipo-btn flex-1 py-2 rounded-lg font-semibold text-sm transition-colors bg-navy-deep text-ink-300 border border-navy-border hover:bg-navy-border/50';
+    });
+    btnEl.className = 'tipo-btn flex-1 py-2 rounded-lg font-semibold text-sm transition-colors bg-sky text-white border border-sky';
+
+    const campoPrecio = document.getElementById('campoPrecioLimite');
+    const labelPrecio = document.getElementById('labelPrecio');
+
+    if (tipo === 'Market') {
+      campoPrecio.classList.add('hidden');
+    } else {
+      campoPrecio.classList.remove('hidden');
+      labelPrecio.textContent = tipo === 'Limit' ? 'Precio Límite' : 'Precio Stop';
+      if(!document.getElementById('precioLimite').value && precioActualAPI > 0) {
+        document.getElementById('precioLimite').value = precioActualAPI.toFixed(2);
+      }
+    }
+    actualizarVistaPrevia();
+  }
+
+  function actualizarVistaPrevia() {
+    const ticker = document.getElementById('ticker').value;
+    const cantidad = parseInt(document.getElementById('cantidad').value) || 0;
+    
+    let precio = 0;
+    if (estadoOrden.tipoOrden === 'Market') {
+      precio = precioActualAPI;
+    } else {
+      precio = parseFloat(document.getElementById('precioLimite').value) || 0;
+    }
+
+    estadoOrden.ticker = ticker;
+    estadoOrden.cantidad = cantidad;
+    estadoOrden.precioLimite = precio;
+
+    document.getElementById('prevContrato').textContent = `${ticker} · STK · SMART`;
+    
+    const elLado = document.getElementById('prevLado');
+    elLado.textContent = estadoOrden.lado;
+    elLado.className = estadoOrden.lado === 'BUY' ? 'font-bold text-mint' : 'font-bold text-coral';
+    
+    document.getElementById('prevTipo').textContent = estadoOrden.tipoOrden + 'Order';
+
+    const btnConfirmar = document.getElementById('btnConfirmarInicial');
+
+    // Manejo visual durante la carga y error de API
+    if (cargandoPrecio) {
+      document.getElementById('prevPrecio').innerHTML = '<span class="text-sky animate-pulse">Cargando API...</span>';
+      document.getElementById('prevTotal').innerHTML = '<span class="text-sky animate-pulse text-lg">---</span>';
+      btnConfirmar.disabled = true;
+      btnConfirmar.classList.add('opacity-50', 'cursor-not-allowed');
+    } else if (precio === 0) {
+      document.getElementById('prevPrecio').innerHTML = '<span class="text-coral">Precio no disp.</span>';
+      document.getElementById('prevTotal').innerHTML = '<span class="text-coral text-lg">-</span>';
+      btnConfirmar.disabled = true;
+      btnConfirmar.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      const subtotal = cantidad * precio;
+      const total = subtotal + (subtotal * tasaComision);
+      
+      document.getElementById('prevPrecio').textContent = formatearMoneda(precio);
+      document.getElementById('prevTotal').textContent = formatearMoneda(total);
+      
+      if(cantidad > 0) {
+        btnConfirmar.disabled = false;
+        btnConfirmar.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  }
+
+  function formatearMoneda(valor) {
+    return '$' + valor.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  /* ===== LÓGICA DE MODAL Y EJECUCIÓN ===== */
+  function abrirModalConfirmacion() {
+    document.getElementById('modalContrato').textContent = document.getElementById('prevContrato').textContent;
+    
+    const mld = document.getElementById('modalLado');
+    mld.textContent = estadoOrden.lado;
+    mld.className = estadoOrden.lado === 'BUY' ? 'text-mint' : 'text-coral';
+    
+    document.getElementById('modalTipo').textContent = estadoOrden.tipoOrden;
+    document.getElementById('modalCantidad').textContent = estadoOrden.cantidad;
+    document.getElementById('modalTotal').textContent = document.getElementById('prevTotal').textContent;
+    
+    const selectModo = document.getElementById('selectorModo');
+    document.getElementById('modalModo').textContent = selectModo.options[selectModo.selectedIndex].text;
+
+    document.getElementById('checkDobleVerificacion').checked = false;
+    document.getElementById('btnConfirmarFinal').disabled = true;
+
+    const modal = document.getElementById('modalConfirmacion');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function cerrarModal() {
+    const modal = document.getElementById('modalConfirmacion');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function validarCheckDoble() {
+    document.getElementById('btnConfirmarFinal').disabled = !document.getElementById('checkDobleVerificacion').checked;
+  }
+
+  function ejecutarYDescargar() {
+    cerrarModal();
+    mostrarToast('Transmitiendo orden al broker...', 'gold');
+
+    // Simular latencia de red/ejecución
+    setTimeout(() => {
+      mostrarToast(`✅ Orden ejecutada: ${estadoOrden.ticker} a $${estadoOrden.precioLimite}`, 'mint');
+      generarReciboTXT(estadoOrden);
+    }, 1500);
+  }
+
+  function generarReciboTXT(orden) {
+    const total = (orden.cantidad * orden.precioLimite).toFixed(2);
+    const idUnico = Math.floor(Math.random() * 1000000);
+    const fechaActual = new Date();
+    
+    const contenido = `
+=============================================
+   INVESTAI - COMPROBANTE DE OPERACIÓN
+=============================================
+Fecha/Hora : ${fechaActual.toLocaleString('es-PE')}
+ID Orden   : #INV-${idUnico}
+---------------------------------------------
+Ticker     : ${orden.ticker}
+Operación  : ${orden.lado}
+Tipo       : ${orden.tipoOrden} Order
+Cantidad   : ${orden.cantidad} acciones
+Precio Obj.: $${orden.precioLimite}
+---------------------------------------------
+Valor Total Estimado: $${total}
+=============================================
+* Recibo generado automáticamente por InvestAI
+    `.trim();
+
+    const blob = new Blob([contenido], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    
+    const timestampArchivo = fechaActual.toTimeString().split(' ')[0].replace(/:/g,'');
+    a.download = `Recibo_${orden.ticker}_${orden.lado}_${timestampArchivo}.txt`;
+    
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function mostrarToast(mensaje, colorType) {
+    const toast = document.getElementById('toastNotificacion');
+    const msgEl = document.getElementById('toastMensaje');
+    const icon = document.getElementById('toastIcono');
+    
+    toast.className = 'fixed bottom-6 right-6 px-5 py-3 rounded-xl font-medium text-sm shadow-xl flex items-center gap-3 transition-all duration-300 z-50 max-w-sm';
+    
+    if (colorType === 'mint') {
+      toast.classList.add('bg-mint', 'text-navy-deep');
+      icon.setAttribute('data-lucide', 'check-circle');
+    } else if (colorType === 'coral') {
+      toast.classList.add('bg-coral', 'text-white');
+      icon.setAttribute('data-lucide', 'x-circle');
+    } else {
+      toast.classList.add('bg-gold', 'text-navy-deep');
+      icon.setAttribute('data-lucide', 'clock');
+    }
+    
+    lucide.createIcons();
+    msgEl.textContent = mensaje;
+    toast.classList.remove('translate-y-24', 'opacity-0');
+    
+    setTimeout(() => { toast.classList.add('translate-y-24', 'opacity-0'); }, 4000);
+  }
+
+  function cambiarModoConexion() {
+    const modo = document.getElementById('selectorModo').value;
+    const semaforo = document.getElementById('semaforoIB');
+    const alertaPaper = document.getElementById('alertaPaper');
+
+    semaforo.className = 'w-3 h-3 rounded-full shrink-0';
+
+    if (modo === 'conectado') {
+      semaforo.classList.add('bg-mint', 'shadow-[0_0_8px_rgba(74,222,128,0.6)]');
+      alertaPaper.classList.add('hidden');
+    } else if (modo === 'desconectado') {
+      semaforo.classList.add('bg-coral', 'shadow-[0_0_8px_rgba(239,83,80,0.6)]');
+      alertaPaper.classList.add('hidden');
+    } else {
+      semaforo.classList.add('bg-gold', 'shadow-[0_0_8px_rgba(197,150,26,0.6)]');
+      alertaPaper.classList.remove('hidden');
+    }
+  }
+</script>
+</body>
+</html>
