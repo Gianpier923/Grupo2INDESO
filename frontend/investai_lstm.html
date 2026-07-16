@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InvestAI | LSTM Regressor</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: { deep: '#0A1428', base: '#0D1B33', card: '#122548', border: '#1F3864' },
+          teal: '#26A69A', mint: '#4ADE80', gold: '#C5961A', sky: '#3B82F6', coral: '#EF5350',
+          ink: { 100: '#E2E8F3', 300: '#9FB0CE', 500: '#6B7A99' }
+        },
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+      }
+    }
+  };
+</script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+<style>
+  a:focus-visible, button:focus-visible, select:focus-visible {
+    outline: 2px solid #4ADE80;
+    outline-offset: 3px;
+    border-radius: 0.5rem;
+  }
+  ::selection { background: #26A69A; color: #0A1428; }
+
+  .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+  .custom-scroll::-webkit-scrollbar-thumb { background: #1F3864; border-radius: 10px; }
+  .custom-scroll::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+
+  .empty-space { min-height: 60px; }
+
+  .disabled-panel { opacity: .35; pointer-events: none; transition: opacity .2s; }
+
+  .horizonte-btn {
+    padding: 6px 16px; border-radius: 10px; font-size: 12px; font-weight: 700;
+    border: 1.5px solid #1F3864; color: #9FB0CE; transition: all .15s;
+  }
+  .horizonte-btn:hover { border-color: rgba(59,130,246,.6); color: #E2E8F3; }
+  .horizonte-btn.activo { background: #3B82F6; border-color: #3B82F6; color: #fff; }
+
+  .modelo-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    background: rgba(197,150,26,.15); color: #E8B836; border: 1px solid rgba(197,150,26,.4);
+  }
+</style>
+</head>
+
+<body class="bg-navy-base text-ink-100 font-sans antialiased">
+
+  <!-- ============ HEADER (idéntico patrón a portafolio.html) ============ -->
+  <header class="border-b border-navy-border/60 bg-navy-deep/40">
+    <div class="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gold/15 text-gold flex items-center justify-center shrink-0">
+          <i data-lucide="trending-up" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white">Ernesto Investing AI</h1>
+          <p class="text-sm text-ink-300">LSTM Regressor — Pronóstico de Precios · Datos Reales MongoDB / FastAPI</p>
+        </div>
+      </div>
+      <nav class="flex flex-wrap gap-2">
+        <a href="home.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border text-ink-300 text-sm hover:border-teal/60 hover:text-teal transition-colors">
+          <i data-lucide="home" class="w-4 h-4"></i> Portal
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ============ BARRA DE ESTADO DE CONEXIÓN ============ -->
+  <section class="border-b border-navy-border/60 bg-navy-card/30">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-300">
+        <span id="dotEstado" class="w-2 h-2 rounded-full bg-ink-500"></span>
+        <span id="estadoTexto">Conectando con la API...</span>
+      </div>
+      <div class="text-xs text-ink-500 font-mono" id="reloj">--:--:--</div>
+    </div>
+  </section>
+
+  <!-- ============ CONTENIDO ============ -->
+  <main class="max-w-6xl mx-auto px-6 py-8">
+    <div id="aviso" class="mb-6"></div>
+
+    <div id="panelContenido">
+
+      <!-- FILA 1: CONTROLES — ticker + horizonte + leyenda -->
+      <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-5 mb-6 flex flex-wrap items-center gap-6">
+        <div class="flex flex-col gap-1.5">
+          <span class="text-[10px] font-bold uppercase tracking-wide text-ink-300">Activo</span>
+          <select id="selTicker" onchange="cambiarTicker(this.value)"
+            class="bg-navy-deep border border-navy-border rounded-lg px-3 py-2 text-sm font-semibold text-ink-100 min-w-[220px] cursor-pointer">
+          </select>
+        </div>
+
+        <div class="w-px h-10 bg-navy-border/70 hidden sm:block"></div>
+
+        <div class="flex flex-col gap-1.5">
+          <span class="text-[10px] font-bold uppercase tracking-wide text-ink-300">Horizonte de pronóstico</span>
+          <div class="flex gap-2" id="horizonteBtns"></div>
+        </div>
+
+        <div class="w-px h-10 bg-navy-border/70 hidden lg:block"></div>
+
+        <div class="flex items-center gap-5 ml-auto flex-wrap">
+          <div class="flex items-center gap-2 text-xs font-semibold text-ink-300">
+            <span class="w-5 h-[3px] rounded bg-sky"></span> Precio real
+          </div>
+          <div class="flex items-center gap-2 text-xs font-semibold text-ink-300">
+            <span class="w-5 h-[3px] rounded bg-coral"></span> Pronóstico LSTM
+          </div>
+          <div class="flex items-center gap-2 text-xs font-semibold text-ink-300">
+            <span class="w-5 h-[6px] rounded bg-coral/20 border border-coral/40"></span> Banda de confianza 95%
+          </div>
+        </div>
+      </div>
+
+      <!-- FILA 2: GRÁFICO PRINCIPAL -->
+      <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 mb-6 overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-navy-border/60 flex-wrap gap-3">
+          <div class="flex items-center gap-3">
+            <span id="hdrTicker" class="text-lg font-extrabold text-white">—</span>
+            <span id="hdrNombre" class="text-sm text-ink-300">—</span>
+          </div>
+          <span class="modelo-badge"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> LSTM Regressor · Keras/TensorFlow</span>
+        </div>
+
+        <div class="flex flex-wrap gap-x-8 gap-y-2 px-6 py-3 border-b border-navy-border/60 bg-navy-deep/30 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-ink-300">Último precio real</span>
+            <span id="ciReal" class="font-bold text-white">—</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-ink-300">LSTM día +1</span>
+            <span id="ciLstm" class="font-bold text-coral">—</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-ink-300">Fecha base del pronóstico</span>
+            <span id="ciFecha" class="font-bold text-ink-100">—</span>
+          </div>
+          <div class="flex items-center gap-2 ml-auto">
+            <span class="text-ink-300">Ventana de entrenamiento</span>
+            <span class="font-bold text-ink-100">60 días</span>
+          </div>
+        </div>
+
+        <div class="relative h-[360px] p-4">
+          <canvas id="lstmChart"></canvas>
+        </div>
+      </div>
+
+      <!-- FILA 3: MÉTRICAS DEL MODELO LSTM -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-5 relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-[3px] bg-coral"></div>
+          <div class="text-[10px] font-bold uppercase tracking-wide text-ink-300 mb-2">RMSE (USD)</div>
+          <div id="mRmseUsd" class="text-2xl font-extrabold text-coral">—</div>
+          <div class="text-[11px] text-ink-500 mt-1">Error cuadrático medio, set de prueba</div>
+        </div>
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-5 relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-[3px] bg-gold"></div>
+          <div class="text-[10px] font-bold uppercase tracking-wide text-ink-300 mb-2">RMSE (%)</div>
+          <div id="mRmsePct" class="text-2xl font-extrabold text-white">—</div>
+          <div class="text-[11px] text-ink-500 mt-1">Relativo al precio medio de test</div>
+        </div>
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-5 relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-[3px] bg-teal"></div>
+          <div class="text-[10px] font-bold uppercase tracking-wide text-ink-300 mb-2">MAE (USD)</div>
+          <div id="mMae" class="text-2xl font-extrabold text-teal">—</div>
+          <div class="text-[11px] text-ink-500 mt-1">Error absoluto medio</div>
+        </div>
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-5 relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-[3px] bg-sky"></div>
+          <div class="text-[10px] font-bold uppercase tracking-wide text-ink-300 mb-2">R²</div>
+          <div id="mR2" class="text-2xl font-extrabold text-sky">—</div>
+          <div class="text-[11px] text-ink-500 mt-1">Coeficiente de determinación</div>
+        </div>
+      </div>
+
+      <!-- FILA 4: COMPARACIÓN CON MODELO DE CONTROL ARIMA -->
+      <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6 mb-6">
+        <div class="flex items-center gap-2 mb-4">
+          <i data-lucide="scale" class="w-4 h-4 text-mint"></i>
+          <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Modelo de Control — ARIMA(1,1,1)</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="rounded-xl bg-navy-deep/50 border border-navy-border/60 p-4">
+            <div class="text-[10px] font-bold uppercase tracking-wide text-ink-300 mb-1">RMSE LSTM Regressor</div>
+            <div id="arimaRmseLstm" class="text-lg font-extrabold text-coral">—</div>
+          </div>
+          <div class="rounded-xl bg-navy-deep/50 border border-navy-border/60 p-4">
+            <div class="text-[10px] font-bold uppercase tracking-wide text-ink-300 mb-1">RMSE ARIMA (control)</div>
+            <div id="arimaRmseArima" class="text-lg font-extrabold text-ink-100">—</div>
+          </div>
+          <div class="rounded-xl bg-navy-deep/50 border border-navy-border/60 p-4">
+            <div class="text-[10px] font-bold uppercase tracking-wide text-ink-300 mb-1">Mejora del LSTM vs ARIMA</div>
+            <div id="arimaMejora" class="text-lg font-extrabold text-mint">—</div>
+          </div>
+        </div>
+        <p class="text-[11px] text-ink-500 mt-4 leading-relaxed">
+          El ARIMA(1,1,1) se usa únicamente como control estadístico: el Notebook 6 calcula su RMSE de validación
+          sobre el mismo set de prueba, pero no persiste un pronóstico día a día en MongoDB. Por eso solo se compara
+          aquí como métrica — el gráfico superior únicamente traza series reales almacenadas en la base de datos
+          (precios reales y pronóstico LSTM con sus bandas de confianza).
+        </p>
+      </div>
+
+      <!-- FILA 5: TABLA DE PRONÓSTICO + PANEL DE PARÁMETROS -->
+      <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 overflow-hidden">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-navy-border/60">
+            <div class="flex items-center gap-2">
+              <i data-lucide="calendar" class="w-4 h-4 text-mint"></i>
+              <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Tabla de Pronóstico</span>
+            </div>
+            <span class="text-[11px] text-ink-500" id="tablaSubtitulo">—</span>
+          </div>
+          <div class="overflow-x-auto custom-scroll max-h-[420px]">
+            <table class="w-full text-left text-sm whitespace-nowrap">
+              <thead class="bg-navy-deep/50 text-ink-300 text-[10px] uppercase sticky top-0">
+                <tr>
+                  <th class="p-3">Día</th>
+                  <th class="p-3">Fecha proyectada</th>
+                  <th class="p-3 text-right">Precio LSTM (USD)</th>
+                  <th class="p-3 text-right">Banda inferior</th>
+                  <th class="p-3 text-right">Banda superior</th>
+                </tr>
+              </thead>
+              <tbody id="tablaPronostico" class="text-ink-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-6">
+          <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+            <div class="flex items-center gap-2 mb-4">
+              <i data-lucide="settings" class="w-4 h-4 text-mint"></i>
+              <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Hiperparámetros de Entrenamiento</span>
+            </div>
+            <div class="flex flex-col gap-3 text-sm">
+              <div class="flex justify-between"><span class="text-ink-300">Épocas</span><span class="font-bold text-white">100</span></div>
+              <div class="flex justify-between"><span class="text-ink-300">Batch size</span><span class="font-bold text-white">32</span></div>
+              <div class="flex justify-between"><span class="text-ink-300">Ventana (look-back)</span><span class="font-bold text-white">60 días</span></div>
+              <div class="flex justify-between"><span class="text-ink-300">Partición train/test</span><span class="font-bold text-white">80% / 20%</span></div>
+              <div class="flex justify-between"><span class="text-ink-300">Optimizador</span><span class="font-bold text-white">Adam</span></div>
+              <hr class="border-navy-border/60">
+              <div class="flex justify-between"><span class="text-ink-300">Muestras train</span><span id="pMuestrasTrain" class="font-bold text-mint">—</span></div>
+              <div class="flex justify-between"><span class="text-ink-300">Muestras test</span><span id="pMuestrasTest" class="font-bold text-mint">—</span></div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+            <div class="flex items-center gap-2 mb-4">
+              <i data-lucide="layers" class="w-4 h-4 text-mint"></i>
+              <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Arquitectura del Modelo</span>
+            </div>
+            <div class="flex flex-col gap-2 text-xs">
+              <div class="rounded-lg bg-navy-deep/50 border border-navy-border/60 px-3 py-2">
+                <span class="font-bold text-sky">LSTM</span> · 64 unidades · return_sequences=True
+              </div>
+              <div class="rounded-lg bg-navy-deep/50 border border-navy-border/60 px-3 py-2">
+                <span class="font-bold text-coral">Dropout</span> · 0.20
+              </div>
+              <div class="rounded-lg bg-navy-deep/50 border border-navy-border/60 px-3 py-2">
+                <span class="font-bold text-sky">LSTM</span> · 32 unidades · return_sequences=False
+              </div>
+              <div class="rounded-lg bg-navy-deep/50 border border-navy-border/60 px-3 py-2">
+                <span class="font-bold text-coral">Dropout</span> · 0.20
+              </div>
+              <div class="rounded-lg bg-navy-deep/50 border border-navy-border/60 px-3 py-2">
+                <span class="font-bold text-teal">Dense</span> · 16 neuronas · ReLU
+              </div>
+              <div class="rounded-lg bg-navy-deep/50 border border-navy-border/60 px-3 py-2">
+                <span class="font-bold text-gold">Dense</span> · 1 neurona · lineal (precio USD)
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div><!-- /panelContenido -->
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="border-t border-navy-border/60 bg-navy-deep/40 mt-8">
+    <div class="max-w-6xl mx-auto px-6 py-8 text-sm text-ink-500 text-center">
+      Ernesto Investing AI — iDeSo · UNMSM · Prof. E. D. Cancho-Rodríguez, MBA (GWU)
+    </div>
+  </footer>
+
+<script>
+/* ============================================================
+   CONFIGURACIÓN — 5 tickers mineros reales (MongoDB Atlas)
+   ============================================================ */
+const TICKERS = ['FSM', 'VOLCABC1.LM', 'ABX.TO', 'BVN', 'BHP'];
+
+const NOMBRES = {
+  'FSM':         'Fortuna Silver Mines',
+  'VOLCABC1.LM': 'Volcan Cia. Minera',
+  'ABX.TO':      'Barrick Gold Corp.',
+  'BVN':         'Cia. de Minas Buenaventura',
+  'BHP':         'BHP Billiton Limited'
+};
+
+const HORIZONTES = [7, 14, 30, 60];
+
+let ESTADO = { ticker: TICKERS[0], horizonte: 30, cache: {} };
+let chartRef = null;
+
+/* ============================================================
+   CONEXIÓN A LA API (mismo patrón que portafolio.html)
+   ============================================================ */
+function getApiUrl() {
+  return sessionStorage.getItem('API_URL');
+}
+
+function mostrarAviso(tipo, html) {
+  const aviso = document.getElementById('aviso');
+  const estilos = {
+    info:  'bg-sky/10 text-sky border-sky/30',
+    error: 'bg-coral/10 text-coral border-coral/30'
+  };
+  const icono = tipo === 'error' ? 'alert-circle' : 'loader';
+
+  aviso.innerHTML =
+    '<div class="inline-flex items-start gap-2 px-4 py-3 rounded-xl border text-sm ' + estilos[tipo] + '">' +
+      '<i data-lucide="' + icono + '" class="w-4 h-4 mt-0.5 shrink-0 ' + (tipo === 'info' ? 'animate-spin' : '') + '"></i>' +
+      '<span>' + html + '</span>' +
+    '</div>';
+
+  lucide.createIcons();
+}
+
+function limpiarAviso() { document.getElementById('aviso').innerHTML = ''; }
+
+function setEstadoConexion(ok) {
+  document.getElementById('dotEstado').className = 'w-2 h-2 rounded-full ' + (ok ? 'bg-mint' : 'bg-coral');
+  document.getElementById('estadoTexto').textContent = ok ? 'Datos reales conectados' : 'Sin conexión a la API';
+}
+
+function setPanelHabilitado(ok) {
+  document.getElementById('panelContenido').classList.toggle('disabled-panel', !ok);
+}
+
+/* ============================================================
+   RELOJ EN TIEMPO REAL
+   ============================================================ */
+function actualizarReloj() {
+  const ahora = new Date();
+  document.getElementById('reloj').textContent = ahora.toLocaleTimeString('es-PE', { hour12: false });
+}
+actualizarReloj();
+setInterval(actualizarReloj, 1000);
+
+/* ============================================================
+   HELPERS DE FORMATO
+   ============================================================ */
+const fmt = {
+  usd: v => (v == null ? '—' : (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
+  pct: v => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%'),
+  num: v => (v == null ? '—' : v.toLocaleString('en-US', { maximumFractionDigits: 4 }))
+};
+
+function fechaCorta(f) {
+  const d = new Date(f + 'T00:00:00');
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+}
+
+/* ============================================================
+   SELECTOR DE TICKER Y BOTONES DE HORIZONTE
+   ============================================================ */
+function poblarSelectorTicker() {
+  const sel = document.getElementById('selTicker');
+  sel.innerHTML = TICKERS.map(t => `<option value="${t}">${t} — ${NOMBRES[t]}</option>`).join('');
+  sel.value = ESTADO.ticker;
+}
+
+function poblarBotonesHorizonte() {
+  const cont = document.getElementById('horizonteBtns');
+  cont.innerHTML = HORIZONTES.map(h => `
+    <button class="horizonte-btn ${h === ESTADO.horizonte ? 'activo' : ''}" data-h="${h}" onclick="cambiarHorizonte(${h})">${h}d</button>
+  `).join('');
+}
+
+function cambiarHorizonte(h) {
+  ESTADO.horizonte = h;
+  document.querySelectorAll('.horizonte-btn').forEach(btn => {
+    btn.classList.toggle('activo', Number(btn.dataset.h) === h);
+  });
+  const datos = ESTADO.cache[ESTADO.ticker];
+  if (datos) renderizarTodo(datos);
+}
+
+function cambiarTicker(ticker) {
+  ESTADO.ticker = ticker;
+  if (ESTADO.cache[ticker]) {
+    renderizarTodo(ESTADO.cache[ticker]);
+    setEstadoConexion(true);
+    setPanelHabilitado(true);
+    limpiarAviso();
+  } else {
+    cargarTicker(ticker);
+  }
+}
+
+/* ============================================================
+   GRÁFICO — Chart.js, precio real + pronóstico LSTM + banda 95%
+   ============================================================ */
+function construirChart(datos) {
+  const historico = datos.historico; // [{fecha, close}]
+  const horizontes = datos.pronostico.horizontes || {};
+  const serieForecast = horizontes[String(ESTADO.horizonte)] || [];
+
+  const fechasHist = historico.map(d => d.fecha);
+  const fechasForecast = serieForecast.map(d => d.fecha_proyectada);
+  const labels = [...fechasHist, ...fechasForecast].map(fechaCorta);
+
+  const nHist = fechasHist.length;
+  const nFcst = fechasForecast.length;
+
+  // Precio real: valores en la parte histórica, null en el tramo futuro
+  const dataReal = [...historico.map(d => d.close), ...Array(nFcst).fill(null)];
+
+  // Pronóstico LSTM: null en histórico salvo el último punto real (para conectar visualmente),
+  // seguido de los valores proyectados
+  const dataForecast = Array(nHist - 1).fill(null)
+    .concat([historico.length ? historico[historico.length - 1].close : null])
+    .concat(serieForecast.map(d => d.precio_proyectado_usd));
+
+  const dataBandaInf = Array(nHist - 1).fill(null)
+    .concat([historico.length ? historico[historico.length - 1].close : null])
+    .concat(serieForecast.map(d => d.banda_inferior));
+
+  const dataBandaSup = Array(nHist - 1).fill(null)
+    .concat([historico.length ? historico[historico.length - 1].close : null])
+    .concat(serieForecast.map(d => d.banda_superior));
+
+  const ctx = document.getElementById('lstmChart').getContext('2d');
+  if (chartRef) chartRef.destroy();
+
+  chartRef = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Banda inferior',
+          data: dataBandaInf,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          pointRadius: 0,
+          fill: false,
+          tension: 0.15,
+          order: 3
+        },
+        {
+          label: 'Banda de confianza 95%',
+          data: dataBandaSup,
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(239,83,80,0.14)',
+          pointRadius: 0,
+          fill: '-1',
+          tension: 0.15,
+          order: 2
+        },
+        {
+          label: 'Precio real',
+          data: dataReal,
+          borderColor: '#3B82F6',
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          fill: false,
+          tension: 0.15,
+          order: 1
+        },
+        {
+          label: 'Pronóstico LSTM',
+          data: dataForecast,
+          borderColor: '#EF5350',
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          borderDash: [6, 3],
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          fill: false,
+          tension: 0.15,
+          order: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0A1428',
+          titleColor: '#9FB0CE',
+          bodyColor: '#FFFFFF',
+          padding: 10,
+          filter: item => item.raw != null,
+          callbacks: {
+            label: item => ` ${item.dataset.label}: ${fmt.usd(item.raw)}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#6B7A99', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }
+        },
+        y: {
+          grid: { color: '#1F3864' },
+          ticks: { color: '#6B7A99', font: { size: 10 }, callback: v => '$' + v.toLocaleString('en-US') }
+        }
+      }
+    }
+  });
+}
+
+/* ============================================================
+   RENDER: TABLA DE PRONÓSTICO
+   ============================================================ */
+function renderizarTabla(datos) {
+  const horizontes = datos.pronostico.horizontes || {};
+  const serie = horizontes[String(ESTADO.horizonte)] || [];
+  const tbody = document.getElementById('tablaPronostico');
+
+  tbody.innerHTML = serie.map((d, i) => `
+    <tr class="border-b border-navy-border/50 hover:bg-navy-deep/40 transition-colors">
+      <td class="p-3 font-semibold text-ink-300">+${i + 1}</td>
+      <td class="p-3">${d.fecha_proyectada}</td>
+      <td class="p-3 text-right font-bold text-coral">${fmt.usd(d.precio_proyectado_usd)}</td>
+      <td class="p-3 text-right text-ink-300">${fmt.usd(d.banda_inferior)}</td>
+      <td class="p-3 text-right text-ink-300">${fmt.usd(d.banda_superior)}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('tablaSubtitulo').textContent =
+    `Horizonte de ${ESTADO.horizonte} días · ${serie.length} proyecciones`;
+}
+
+/* ============================================================
+   RENDER: MÉTRICAS, INFO BAR Y COMPARACIÓN ARIMA
+   ============================================================ */
+function renderizarMetricas(datos) {
+  const m = datos.metricas || {};
+  document.getElementById('mRmseUsd').textContent = fmt.usd(m.rmse_usd);
+  document.getElementById('mRmsePct').textContent = m.rmse_pct != null ? m.rmse_pct.toFixed(2) + '%' : '—';
+  document.getElementById('mMae').textContent = fmt.usd(m.mae_usd);
+  document.getElementById('mR2').textContent = m.r2 != null ? m.r2.toFixed(4) : '—';
+
+  document.getElementById('arimaRmseLstm').textContent = fmt.usd(m.rmse_usd);
+  document.getElementById('arimaRmseArima').textContent = fmt.usd(m.rmse_arima_control);
+  document.getElementById('arimaMejora').textContent = m.mejora_vs_arima_pct != null ? fmt.pct(m.mejora_vs_arima_pct) : '—';
+
+  document.getElementById('pMuestrasTrain').textContent = m.muestras_train != null ? m.muestras_train : '—';
+  document.getElementById('pMuestrasTest').textContent = m.muestras_test != null ? m.muestras_test : '—';
+}
+
+function renderizarInfoBar(datos) {
+  const historico = datos.historico;
+  const ultimo = historico.length ? historico[historico.length - 1] : null;
+  const horizontes = datos.pronostico.horizontes || {};
+  const primerForecast = (horizontes[String(ESTADO.horizonte)] || [])[0];
+
+  document.getElementById('ciReal').textContent = ultimo ? fmt.usd(ultimo.close) : '—';
+  document.getElementById('ciLstm').textContent = primerForecast ? fmt.usd(primerForecast.precio_proyectado_usd) : '—';
+  document.getElementById('ciFecha').textContent = datos.pronostico.fecha_base || '—';
+}
+
+function renderizarTodo(datos) {
+  document.getElementById('hdrTicker').textContent = ESTADO.ticker;
+  document.getElementById('hdrNombre').textContent = NOMBRES[ESTADO.ticker];
+
+  construirChart(datos);
+  renderizarTabla(datos);
+  renderizarMetricas(datos);
+  renderizarInfoBar(datos);
+}
+
+/* ============================================================
+   CARGA DE DATOS REALES — /api/mercado y /api/lstm-regressor
+   ============================================================ */
+async function cargarTicker(ticker) {
+  const apiUrl = getApiUrl();
+  if (!apiUrl) {
+    mostrarAviso('error', 'No hay URL de API. Vuelve al portal y verifica la conexión.');
+    setEstadoConexion(false);
+    setPanelHabilitado(false);
+    return;
+  }
+
+  try {
+    mostrarAviso('info', `Obteniendo pronóstico LSTM real para ${ticker} desde MongoDB / FastAPI...`);
+    const headers = { 'ngrok-skip-browser-warning': 'true' };
+
+    const [respMercado, respLstm] = await Promise.all([
+      fetch(apiUrl + '/api/mercado/' + encodeURIComponent(ticker), { headers }),
+      fetch(apiUrl + '/api/lstm-regressor/' + encodeURIComponent(ticker), { headers })
+    ]);
+
+    if (!respMercado.ok) throw new Error('HTTP ' + respMercado.status + ' en /api/mercado/' + ticker);
+    if (!respLstm.ok) throw new Error('HTTP ' + respLstm.status + ' en /api/lstm-regressor/' + ticker);
+
+    const dataMercado = await respMercado.json();
+    const dataLstm = await respLstm.json();
+
+    const historico = (dataMercado.datos || [])
+      .filter(d => d.close != null)
+      .map(d => ({ fecha: d.fecha, close: d.close }));
+
+    if (!dataLstm.pronostico || !dataLstm.pronostico.horizontes) {
+      throw new Error('El pronóstico LSTM aún no tiene datos para este ticker');
+    }
+
+    const datos = { historico, pronostico: dataLstm.pronostico, metricas: dataLstm.metricas || {} };
+    ESTADO.cache[ticker] = datos;
+
+    renderizarTodo(datos);
+    setEstadoConexion(true);
+    setPanelHabilitado(true);
+    limpiarAviso();
+  } catch (e) {
+    mostrarAviso('error', 'No se pudo obtener datos reales de la API (' + e.message + '). Vuelve al portal y verifica la conexión, o ejecuta el Notebook 6 (LSTM Regressor) si aún no fue corrido para este ticker.');
+    setEstadoConexion(false);
+    setPanelHabilitado(false);
+  }
+}
+
+/* ============================================================
+   FLUJO PRINCIPAL — se inicializa recién cuando el DOM y los
+   scripts externos (lucide, Chart.js) ya terminaron de cargar
+   ============================================================ */
+window.addEventListener('DOMContentLoaded', () => {
+  lucide.createIcons();
+  poblarSelectorTicker();
+  poblarBotonesHorizonte();
+  cargarTicker(ESTADO.ticker);
+});
+</script>
+</body>
+</html>

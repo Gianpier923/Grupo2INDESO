@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InvestAI | Consola de Modelos de IA</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: { deep: '#0A1428', base: '#0D1B33', card: '#122548', border: '#1F3864' },
+          teal: '#26A69A', mint: '#4ADE80', gold: '#C5961A', sky: '#3B82F6', coral: '#EF5350',
+          ink: { 100: '#E2E8F3', 300: '#9FB0CE', 500: '#6B7A99' }
+        },
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+      }
+    }
+  };
+</script>
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+  a:focus-visible, button:focus-visible, select:focus-visible {
+    outline: 2px solid #4ADE80;
+    outline-offset: 3px;
+    border-radius: 0.5rem;
+  }
+  ::selection { background: #26A69A; color: #0A1428; }
+
+  .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+  .custom-scroll::-webkit-scrollbar-thumb { background: #1F3864; border-radius: 10px; }
+  .custom-scroll::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+
+  .empty-space { min-height: 60px; }
+
+  .senal-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: .3px;
+  }
+  .senal-badge.buy  { background: rgba(74,222,128,.12); color: #4ADE80; }
+  .senal-badge.sell { background: rgba(239,83,80,.12);  color: #EF5350; }
+  .senal-badge.hold { background: rgba(197,150,26,.15);  color: #E8B836; }
+
+  .disabled-panel { opacity: .35; pointer-events: none; transition: opacity .2s; }
+
+  .badge-estado {
+    padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700;
+    letter-spacing: .3px; display: inline-block;
+  }
+  .badge-estado.Cargado     { background: rgba(74,222,128,.12); color: #4ADE80; }
+  .badge-estado.Cargando    { background: rgba(197,150,26,.15); color: #E8B836; }
+  .badge-estado.Pendiente   { background: rgba(107,122,153,.18); color: #9FB0CE; }
+  .badge-estado.Inactivo    { background: rgba(107,122,153,.10); color: #6B7A99; }
+  .badge-estado.Error       { background: rgba(239,83,80,.12); color: #EF5350; }
+
+  .item-check.inactivo { opacity: .45; }
+
+  .celda-cm {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 14px 6px; border-radius: 10px; font-weight: 800; font-size: 1.05rem;
+  }
+  .celda-cm .etiqueta { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; opacity: .8; margin-top: 3px; }
+</style>
+</head>
+
+<body class="bg-navy-base text-ink-100 font-sans antialiased">
+
+  <!-- ============ HEADER (idéntico patrón a portafolio.html) ============ -->
+  <header class="border-b border-navy-border/60 bg-navy-deep/40">
+    <div class="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gold/15 text-gold flex items-center justify-center shrink-0">
+          <i data-lucide="cpu" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white">Ernesto Investing AI</h1>
+          <p class="text-sm text-ink-300">Consola de Modelos de IA — Core Predictivo (5 Modelos Reales)</p>
+        </div>
+      </div>
+      <nav class="flex flex-wrap gap-2">
+        <a href="home.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border text-ink-300 text-sm hover:border-teal/60 hover:text-teal transition-colors">
+          <i data-lucide="home" class="w-4 h-4"></i> Portal
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ============ BARRA DE ESTADO DE CONEXIÓN + SELECTOR DE TICKER ============ -->
+  <section class="border-b border-navy-border/60 bg-navy-card/30">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-300">
+        <span id="dotEstado" class="w-2 h-2 rounded-full bg-ink-500"></span>
+        <span id="estadoTexto">Conectando con la API...</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <label for="selectTicker" class="text-xs font-semibold uppercase tracking-wide text-ink-300">Ticker</label>
+          <select id="selectTicker" onchange="cargarDatosModelos()"
+            class="bg-navy-deep border border-navy-border text-ink-100 text-sm font-bold rounded-lg px-3 py-1.5 focus:border-teal/60">
+          </select>
+        </div>
+        <div class="text-xs text-ink-500 font-mono" id="reloj">--:--:--</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONTENIDO ============ -->
+  <main class="max-w-6xl mx-auto px-6 py-8">
+    <div id="aviso" class="mb-6"></div>
+
+    <div id="panelContenido">
+
+      <!-- FILA 1: SELECCIÓN DE MODELOS + FICHA TÉCNICA -->
+      <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 mb-6">
+
+        <!-- Panel de selección -->
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <i data-lucide="list-checks" class="w-4 h-4 text-mint"></i>
+            <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Modelos Activos</span>
+          </div>
+
+          <div class="flex gap-2 mb-4">
+            <button onclick="seleccionarTodos()"
+              class="flex-1 px-3 py-2 rounded-lg border border-navy-border text-ink-300 text-xs font-semibold hover:border-mint/60 hover:text-mint transition-colors">
+              Seleccionar Todos
+            </button>
+            <button onclick="limpiarSeleccion()"
+              class="flex-1 px-3 py-2 rounded-lg border border-navy-border text-ink-300 text-xs font-semibold hover:border-coral/60 hover:text-coral transition-colors">
+              Limpiar
+            </button>
+          </div>
+
+          <div class="flex flex-col gap-2" id="listaChecks"></div>
+
+          <div class="mt-4 text-center text-xs font-semibold text-ink-300 bg-navy-deep/60 rounded-lg py-2" id="contadorSeleccion">
+            0 de 5 modelos seleccionados
+          </div>
+
+          <div class="mt-4 text-[11px] text-ink-500 leading-relaxed">
+            Solo se muestran los modelos con datos reales entrenados y persistidos en MongoDB Atlas:
+            <span class="text-ink-300 font-semibold">SVC (Notebook 2)</span> y las 4 arquitecturas recurrentes
+            <span class="text-ink-300 font-semibold">LSTM / BiLSTM / GRU / SimpleRNN (Notebook 4)</span>.
+          </div>
+        </div>
+
+        <!-- Ficha técnica por modelo (arquitectura real, no simulada) -->
+        <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <i data-lucide="layers" class="w-4 h-4 text-mint"></i>
+            <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Ficha Técnica de Arquitectura</span>
+          </div>
+          <div class="flex flex-col gap-3 max-h-[420px] overflow-y-auto custom-scroll pr-1" id="listaFichas"></div>
+        </div>
+      </div>
+
+      <!-- FILA 2: PANEL DE EJECUCIÓN -->
+      <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h3 class="text-white font-bold text-sm mb-1">Carga de Métricas Reales</h3>
+          <p class="text-xs text-ink-300" id="textoInfoEjecucion">
+            Obtiene accuracy, precisión, recall, F1 y matriz de confusión reales desde MongoDB / FastAPI para el ticker seleccionado.
+          </p>
+        </div>
+        <button id="btnCargar" onclick="cargarDatosModelos()"
+          class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-br from-gold to-[#8a6a10] text-navy-deep font-extrabold text-sm hover:opacity-90 transition-opacity shadow-lg shrink-0">
+          <i data-lucide="database" class="w-4 h-4"></i>
+          <span id="textoBtnCargar">CARGAR MÉTRICAS REALES</span>
+        </button>
+      </div>
+
+      <!-- FILA 3: TABLA DE MÉTRICAS -->
+      <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 mb-6 overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-navy-border/60">
+          <div class="flex items-center gap-2">
+            <i data-lucide="bar-chart-3" class="w-4 h-4 text-mint"></i>
+            <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Métricas de Rendimiento — Set de Prueba</span>
+          </div>
+          <span class="text-[11px] text-ink-500" id="tickerEnTabla">Datos reales — MongoDB Atlas</span>
+        </div>
+        <div class="overflow-x-auto custom-scroll">
+          <table class="w-full text-left text-sm whitespace-nowrap">
+            <thead class="bg-navy-deep/50 text-ink-300 text-[10px] uppercase">
+              <tr>
+                <th class="p-3">Modelo</th>
+                <th class="p-3">Señal Actual</th>
+                <th class="p-3 text-right">Confianza</th>
+                <th class="p-3 text-right">Accuracy</th>
+                <th class="p-3 text-right">Precision</th>
+                <th class="p-3 text-right">Recall</th>
+                <th class="p-3 text-right">F1-Score</th>
+                <th class="p-3 text-center">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="cuerpoTablaMetricas" class="text-ink-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- FILA 4: MATRICES DE CONFUSIÓN -->
+      <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+        <div class="flex items-center gap-2 mb-1">
+          <i data-lucide="grid-3x3" class="w-4 h-4 text-mint"></i>
+          <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Matrices de Confusión Reales</span>
+        </div>
+        <p class="text-[11px] text-ink-500 mb-5">Target binario: 1 = BUY (sube el cierre del día siguiente), 0 = SELL (baja). Calculadas sobre el 20% final del set de prueba (partición temporal, sin data leakage).</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" id="listaMatrices"></div>
+      </div>
+
+    </div><!-- /panelContenido -->
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="border-t border-navy-border/60 bg-navy-deep/40 mt-8">
+    <div class="max-w-6xl mx-auto px-6 py-8 text-sm text-ink-500 text-center">
+      Ernesto Investing AI — iDeSo · UNMSM · Prof. E. D. Cancho-Rodríguez, MBA (GWU)
+    </div>
+  </footer>
+
+<script>
+lucide.createIcons();
+
+/* ============================================================
+   CONFIGURACIÓN — 5 tickers reales (idéntico a portafolio.html)
+   ============================================================ */
+const TICKERS = ['FSM', 'VOLCABC1.LM', 'ABX.TO', 'BVN', 'BHP'];
+
+const NOMBRES = {
+  'FSM':         'Fortuna Silver Mines',
+  'VOLCABC1.LM': 'Volcan Cia. Minera',
+  'ABX.TO':      'Barrick Gold Corp.',
+  'BVN':         'Cia. de Minas Buenaventura',
+  'BHP':         'BHP Billiton Limited'
+};
+
+/* ============================================================
+   CONFIGURACIÓN — 5 modelos reales del Core Predictivo
+   (SVC = Notebook 2, LSTM/BiLSTM/GRU/SimpleRNN = Notebook 4)
+   La info de arquitectura es la definida literalmente en cada
+   notebook (capas, seed, épocas, batch, ventana); NO es simulada,
+   solo no viene en el payload de /api/svc y /api/rnn porque esos
+   endpoints devuelven predicción + métricas, no la arquitectura.
+   ============================================================ */
+const MODELOS = [
+  {
+    id: 'SVC', nombre: 'SVC (Support Vector Classifier)', color: 'sky',
+    fuente: 'Notebook 2', endpoint: '/api/svc/{ticker}',
+    arquitectura: 'GridSearchCV sobre kernel [linear, rbf], C [0.1, 1, 10], gamma [scale, auto] · cv=3 · scoring=f1',
+    detalle: 'Partición temporal 80/20 · StandardScaler ajustado solo con train'
+  },
+  {
+    id: 'LSTM', nombre: 'LSTM Classifier', color: 'teal',
+    fuente: 'Notebook 4', endpoint: '/api/rnn/{ticker}/LSTM',
+    arquitectura: 'LSTM(260, return_sequences=True) → Dropout(0.2) → LSTM(130) → Dense(1, sigmoid)',
+    detalle: 'SEED=42 · 80 épocas · batch=64 · ventana=10 días · Adam(lr=0.001)'
+  },
+  {
+    id: 'BiLSTM', nombre: 'BiLSTM Classifier', color: 'mint',
+    fuente: 'Notebook 4', endpoint: '/api/rnn/{ticker}/BiLSTM',
+    arquitectura: 'Bidirectional LSTM(200) → Dropout(0.3) → Bidirectional LSTM(100) → Dense(1, sigmoid)',
+    detalle: 'SEED=42 · 80 épocas · batch=64 · ventana=10 días · Adam(lr=0.001)'
+  },
+  {
+    id: 'GRU', nombre: 'GRU Classifier', color: 'gold',
+    fuente: 'Notebook 4', endpoint: '/api/rnn/{ticker}/GRU',
+    arquitectura: 'GRU(280, return_sequences=True) → GRU(140) → Dense(1, sigmoid) · sin Dropout (por diseño)',
+    detalle: 'SEED=42 · 80 épocas · batch=64 · ventana=10 días · Adam(lr=0.001)'
+  },
+  {
+    id: 'SimpleRNN', nombre: 'SimpleRNN Classifier (baseline)', color: 'coral',
+    fuente: 'Notebook 4', endpoint: '/api/rnn/{ticker}/SimpleRNN',
+    arquitectura: 'SimpleRNN(180, return_sequences=True) → SimpleRNN(90) → Dense(1, sigmoid)',
+    detalle: 'SEED=42 · 80 épocas · batch=64 · ventana=10 días · Adam(lr=0.001) · sin compuertas'
+  }
+];
+
+let metricasActuales = {};
+
+/* ============================================================
+   CONEXIÓN A LA API (mismo patrón que portafolio.html)
+   ============================================================ */
+function getApiUrl() {
+  return sessionStorage.getItem('API_URL');
+}
+
+function mostrarAviso(tipo, html) {
+  const aviso = document.getElementById('aviso');
+  const estilos = {
+    info:  'bg-sky/10 text-sky border-sky/30',
+    error: 'bg-coral/10 text-coral border-coral/30'
+  };
+  const icono = tipo === 'error' ? 'alert-circle' : 'loader';
+
+  aviso.innerHTML =
+    '<div class="inline-flex items-start gap-2 px-4 py-3 rounded-xl border text-sm ' + estilos[tipo] + '">' +
+      '<i data-lucide="' + icono + '" class="w-4 h-4 mt-0.5 shrink-0 ' + (tipo === 'info' ? 'animate-spin' : '') + '"></i>' +
+      '<span>' + html + '</span>' +
+    '</div>';
+
+  lucide.createIcons();
+}
+
+function limpiarAviso() { document.getElementById('aviso').innerHTML = ''; }
+
+function setEstadoConexion(ok) {
+  document.getElementById('dotEstado').className = 'w-2 h-2 rounded-full ' + (ok ? 'bg-mint' : 'bg-coral');
+  document.getElementById('estadoTexto').textContent = ok ? 'Datos reales conectados' : 'Sin conexión a la API';
+}
+
+function setPanelHabilitado(ok) {
+  document.getElementById('panelContenido').classList.toggle('disabled-panel', !ok);
+}
+
+/* ============================================================
+   RELOJ EN TIEMPO REAL
+   ============================================================ */
+function actualizarReloj() {
+  const ahora = new Date();
+  document.getElementById('reloj').textContent = ahora.toLocaleTimeString('es-PE', { hour12: false });
+}
+actualizarReloj();
+setInterval(actualizarReloj, 1000);
+
+/* ============================================================
+   SELECTOR DE TICKER
+   ============================================================ */
+function inicializarSelectorTicker() {
+  const select = document.getElementById('selectTicker');
+  select.innerHTML = TICKERS.map(t => `<option value="${t}">${t} — ${NOMBRES[t]}</option>`).join('');
+}
+
+/* ============================================================
+   PANEL DE SELECCIÓN DE MODELOS (checkboxes)
+   ============================================================ */
+function renderizarChecks() {
+  const contenedor = document.getElementById('listaChecks');
+  contenedor.innerHTML = '';
+
+  MODELOS.forEach(modelo => {
+    const div = document.createElement('div');
+    div.className = 'item-check flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-navy-deep/60';
+    div.id = `item_${modelo.id}`;
+
+    div.innerHTML = `
+      <label for="chk_${modelo.id}" class="flex items-center gap-2.5 text-sm text-ink-100 cursor-pointer flex-1">
+        <input type="checkbox" id="chk_${modelo.id}" checked onchange="onCambioCheckModelo('${modelo.id}')"
+          class="w-4 h-4 accent-[#26A69A] cursor-pointer">
+        ${modelo.nombre}
+      </label>
+      <span class="text-[9px] font-bold uppercase tracking-wide text-ink-500">${modelo.fuente}</span>
+    `;
+    contenedor.appendChild(div);
+  });
+
+  actualizarContadorSeleccion();
+}
+
+function onCambioCheckModelo(idModelo) {
+  const checkbox = document.getElementById(`chk_${idModelo}`);
+  document.getElementById(`item_${idModelo}`).classList.toggle('inactivo', !checkbox.checked);
+  actualizarContadorSeleccion();
+  renderizarTablaMetricas();
+  renderizarMatrices();
+}
+
+function seleccionarTodos() {
+  MODELOS.forEach(modelo => {
+    document.getElementById(`chk_${modelo.id}`).checked = true;
+    document.getElementById(`item_${modelo.id}`).classList.remove('inactivo');
+  });
+  actualizarContadorSeleccion();
+  renderizarTablaMetricas();
+  renderizarMatrices();
+}
+
+function limpiarSeleccion() {
+  MODELOS.forEach(modelo => {
+    document.getElementById(`chk_${modelo.id}`).checked = false;
+    document.getElementById(`item_${modelo.id}`).classList.add('inactivo');
+  });
+  actualizarContadorSeleccion();
+  renderizarTablaMetricas();
+  renderizarMatrices();
+}
+
+function modelosActivos() {
+  return MODELOS.filter(m => document.getElementById(`chk_${m.id}`).checked);
+}
+
+function actualizarContadorSeleccion() {
+  const total = MODELOS.length;
+  const seleccionados = modelosActivos().length;
+  document.getElementById('contadorSeleccion').textContent = `${seleccionados} de ${total} modelos seleccionados`;
+}
+
+/* ============================================================
+   FICHA TÉCNICA DE ARQUITECTURA (info real de cada notebook)
+   ============================================================ */
+function renderizarFichas() {
+  const contenedor = document.getElementById('listaFichas');
+  contenedor.innerHTML = MODELOS.map(modelo => {
+    const m = metricasActuales[modelo.id] || {};
+    const hp = (modelo.id === 'SVC' && m.mejor_kernel)
+      ? `<div class="mt-2 flex flex-wrap gap-2">
+           <span class="text-[10px] font-bold px-2 py-1 rounded-md bg-${modelo.color}/15 text-${modelo.color}">kernel: ${m.mejor_kernel}</span>
+           <span class="text-[10px] font-bold px-2 py-1 rounded-md bg-${modelo.color}/15 text-${modelo.color}">C: ${m.mejor_C}</span>
+           <span class="text-[10px] font-bold px-2 py-1 rounded-md bg-${modelo.color}/15 text-${modelo.color}">gamma: ${m.mejor_gamma}</span>
+         </div>`
+      : '';
+
+    return `
+      <div class="rounded-xl border border-navy-border/60 bg-navy-deep/50 p-4">
+        <div class="flex items-center gap-2 mb-1.5">
+          <span class="w-2 h-2 rounded-full bg-${modelo.color} shrink-0"></span>
+          <span class="font-bold text-white text-sm">${modelo.nombre}</span>
+          <span class="ml-auto text-[9px] font-bold uppercase tracking-wide text-ink-500">${modelo.fuente}</span>
+        </div>
+        <p class="text-[12px] text-ink-300 leading-relaxed">${modelo.arquitectura}</p>
+        <p class="text-[11px] text-ink-500 mt-1">${modelo.detalle}</p>
+        ${hp}
+      </div>
+    `;
+  }).join('');
+}
+
+/* ============================================================
+   TABLA DE MÉTRICAS REALES
+   ============================================================ */
+function claseValor(v, buenoDesde, mediocreDesde) {
+  if (v === null || v === undefined) return 'text-ink-500';
+  if (v >= buenoDesde) return 'text-mint font-bold';
+  if (v >= mediocreDesde) return 'text-gold font-bold';
+  return 'text-coral font-bold';
+}
+
+function renderizarTablaMetricas() {
+  const cuerpo = document.getElementById('cuerpoTablaMetricas');
+  cuerpo.innerHTML = '';
+
+  const activos = new Set(modelosActivos().map(m => m.id));
+
+  MODELOS.forEach(modelo => {
+    const activo = activos.has(modelo.id);
+    const m = metricasActuales[modelo.id] || {};
+    const estado = m.estado || 'Pendiente';
+
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-navy-border/50 hover:bg-navy-deep/40 transition-colors' + (!activo ? ' opacity-40' : '');
+
+    const senal = (m.senal || '').toUpperCase();
+    const senalClass = senal === 'BUY' ? 'buy' : senal === 'SELL' ? 'sell' : 'hold';
+    const senalIcono = senal === 'BUY' ? '▲' : senal === 'SELL' ? '▼' : '—';
+    const senalHtml = senal
+      ? `<span class="senal-badge ${senalClass}">${senalIcono} ${senal}</span>`
+      : `<span class="text-ink-500">—</span>`;
+
+    const conf = m.confianza != null ? (m.confianza * 100).toFixed(1) + '%' : '—';
+    const acc  = m.accuracy != null ? (m.accuracy * 100).toFixed(1) + '%' : '—';
+    const prec = m.precision != null ? (m.precision * 100).toFixed(1) + '%' : '—';
+    const rec  = m.recall != null ? (m.recall * 100).toFixed(1) + '%' : '—';
+    const f1   = m.f1 != null ? m.f1.toFixed(3) : '—';
+
+    const accClase = claseValor(m.accuracy, 0.65, 0.55);
+    const precClase = claseValor(m.precision, 0.65, 0.55);
+    const recClase = claseValor(m.recall, 0.65, 0.55);
+    const f1Clase = claseValor(m.f1, 0.65, 0.55);
+
+    tr.innerHTML = `
+      <td class="p-3">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-sm shrink-0 bg-${modelo.color}"></span>
+          <div>
+            <div class="font-bold text-white text-[13px]">${modelo.nombre}</div>
+            <div class="text-[11px] text-ink-500">${modelo.fuente}</div>
+          </div>
+        </div>
+      </td>
+      <td class="p-3">${senalHtml}</td>
+      <td class="p-3 text-right font-semibold">${conf}</td>
+      <td class="p-3 text-right ${accClase}">${acc}</td>
+      <td class="p-3 text-right ${precClase}">${prec}</td>
+      <td class="p-3 text-right ${recClase}">${rec}</td>
+      <td class="p-3 text-right ${f1Clase}">${f1}</td>
+      <td class="p-3 text-center"><span class="badge-estado ${activo ? estado : 'Inactivo'}">${activo ? estado : 'Inactivo'}</span></td>
+    `;
+    cuerpo.appendChild(tr);
+  });
+}
+
+/* ============================================================
+   MATRICES DE CONFUSIÓN REALES
+   ============================================================ */
+function renderizarMatrices() {
+  const contenedor = document.getElementById('listaMatrices');
+  const activos = modelosActivos();
+
+  if (activos.length === 0) {
+    contenedor.innerHTML = '<div class="text-sm text-ink-500 col-span-full text-center py-6">No hay modelos seleccionados.</div>';
+    return;
+  }
+
+  contenedor.innerHTML = activos.map(modelo => {
+    const m = metricasActuales[modelo.id] || {};
+    const cm = m.matriz_confusion;
+
+    if (!cm) {
+      return `
+        <div class="rounded-xl border border-navy-border/60 bg-navy-deep/50 p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-2 h-2 rounded-full bg-${modelo.color} shrink-0"></span>
+            <span class="font-bold text-white text-sm">${modelo.nombre}</span>
+          </div>
+          <div class="text-xs text-ink-500 text-center py-8">Sin datos cargados todavía</div>
+        </div>
+      `;
+    }
+
+    // cm = [[TN, FP], [FN, TP]]  (orden sklearn: filas=real, columnas=predicho; 0=SELL, 1=BUY)
+    const tn = cm[0][0], fp = cm[0][1], fn = cm[1][0], tp = cm[1][1];
+
+    return `
+      <div class="rounded-xl border border-navy-border/60 bg-navy-deep/50 p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="w-2 h-2 rounded-full bg-${modelo.color} shrink-0"></span>
+          <span class="font-bold text-white text-sm">${modelo.nombre}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="celda-cm bg-mint/10 text-mint">
+            ${tn}<span class="etiqueta">Real SELL / Pred SELL</span>
+          </div>
+          <div class="celda-cm bg-coral/10 text-coral">
+            ${fp}<span class="etiqueta">Real SELL / Pred BUY</span>
+          </div>
+          <div class="celda-cm bg-coral/10 text-coral">
+            ${fn}<span class="etiqueta">Real BUY / Pred SELL</span>
+          </div>
+          <div class="celda-cm bg-mint/10 text-mint">
+            ${tp}<span class="etiqueta">Real BUY / Pred BUY</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  lucide.createIcons();
+}
+
+/* ============================================================
+   FLUJO PRINCIPAL — obtiene datos reales de MongoDB vía FastAPI
+   GET /api/svc/{ticker}  y  GET /api/rnn/{ticker}
+   ============================================================ */
+async function cargarDatosModelos() {
+  const apiUrl = getApiUrl();
+  const ticker = document.getElementById('selectTicker').value;
+  document.getElementById('tickerEnTabla').textContent = `${ticker} — Datos reales · MongoDB Atlas`;
+
+  if (!apiUrl) {
+    mostrarAviso('error', 'No hay URL de API. Vuelve al portal y verifica la conexión.');
+    setEstadoConexion(false);
+    setPanelHabilitado(false);
+    return;
+  }
+
+  const btn = document.getElementById('btnCargar');
+  const textoBtn = document.getElementById('textoBtnCargar');
+  btn.disabled = true;
+  textoBtn.textContent = 'CARGANDO...';
+
+  // Estado "Cargando" mientras llegan los datos
+  MODELOS.forEach(m => {
+    metricasActuales[m.id] = { ...(metricasActuales[m.id] || {}), estado: 'Cargando' };
+  });
+  renderizarTablaMetricas();
+
+  try {
+    mostrarAviso('info', `Obteniendo métricas reales de SVC y arquitecturas RNN para ${ticker} desde MongoDB / FastAPI...`);
+    const headers = { 'ngrok-skip-browser-warning': 'true' };
+
+    const [svcResp, rnnResp] = await Promise.all([
+      fetch(apiUrl + '/api/svc/' + encodeURIComponent(ticker), { headers }).then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' en /api/svc/' + ticker);
+        return r.json();
+      }),
+      fetch(apiUrl + '/api/rnn/' + encodeURIComponent(ticker), { headers }).then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' en /api/rnn/' + ticker);
+        return r.json();
+      })
+    ]);
+
+    // --- SVC ---
+    const svcPred = svcResp.prediccion || {};
+    const svcMet  = svcResp.metricas || {};
+    metricasActuales['SVC'] = {
+      senal: svcPred.senal, confianza: svcPred.confianza,
+      accuracy: svcMet.accuracy, precision: svcMet.precision, recall: svcMet.recall, f1: svcMet.f1,
+      matriz_confusion: svcMet.matriz_confusion,
+      mejor_kernel: svcMet.mejor_kernel, mejor_C: svcMet.mejor_C, mejor_gamma: svcMet.mejor_gamma,
+      estado: 'Cargado'
+    };
+
+    // --- RNN: LSTM / BiLSTM / GRU / SimpleRNN ---
+    const rnnModelos = rnnResp.modelos || {};
+    ['LSTM', 'BiLSTM', 'GRU', 'SimpleRNN'].forEach(nombre => {
+      const bloque = rnnModelos[nombre];
+      if (bloque) {
+        const pred = bloque.prediccion || {};
+        const met = bloque.metricas || {};
+        metricasActuales[nombre] = {
+          senal: pred.senal, confianza: pred.confianza,
+          accuracy: met.accuracy, precision: met.precision, recall: met.recall, f1: met.f1,
+          matriz_confusion: met.matriz_confusion,
+          estado: 'Cargado'
+        };
+      } else {
+        metricasActuales[nombre] = { estado: 'Error' };
+      }
+    });
+
+    renderizarFichas();
+    renderizarTablaMetricas();
+    renderizarMatrices();
+
+    setEstadoConexion(true);
+    setPanelHabilitado(true);
+    limpiarAviso();
+  } catch (e) {
+    MODELOS.forEach(m => {
+      metricasActuales[m.id] = { ...(metricasActuales[m.id] || {}), estado: 'Error' };
+    });
+    renderizarTablaMetricas();
+    mostrarAviso('error', `No se pudo obtener datos reales de la API (${e.message}). Verifica que los Notebooks 2 y 4 hayan sido ejecutados, o vuelve al portal para reconectar.`);
+    setEstadoConexion(false);
+  } finally {
+    btn.disabled = false;
+    textoBtn.textContent = 'CARGAR MÉTRICAS REALES';
+  }
+}
+
+/* ============================================================
+   INICIALIZACIÓN GENERAL
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  inicializarSelectorTicker();
+  renderizarChecks();
+  renderizarFichas();
+  renderizarTablaMetricas();
+  renderizarMatrices();
+  cargarDatosModelos();
+});
+</script>
+</body>
+</html>

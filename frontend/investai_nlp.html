@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InvestAI | Análisis de Sentimiento NLP</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: { deep: '#0A1428', base: '#0D1B33', card: '#122548', border: '#1F3864' },
+          teal: '#26A69A', mint: '#4ADE80', gold: '#C5961A', sky: '#3B82F6', coral: '#EF5350',
+          ink: { 100: '#E2E8F3', 300: '#9FB0CE', 500: '#6B7A99' }
+        },
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+      }
+    }
+  };
+</script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+<style>
+  a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible {
+    outline: 2px solid #4ADE80;
+    outline-offset: 3px;
+    border-radius: 0.5rem;
+  }
+  ::selection { background: #26A69A; color: #0A1428; }
+
+  .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+  .custom-scroll::-webkit-scrollbar-thumb { background: #1F3864; border-radius: 10px; }
+  .custom-scroll::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+
+  .empty-space { min-height: 60px; }
+
+  /* Mismo esquema de color que las señales BUY/SELL/HOLD del portafolio,
+     reutilizado 1:1 para BULLISH/BEARISH/NEUTRAL */
+  .senal-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: .3px;
+  }
+  .senal-badge.buy  { background: rgba(74,222,128,.12); color: #4ADE80; }
+  .senal-badge.sell { background: rgba(239,83,80,.12);  color: #EF5350; }
+  .senal-badge.hold { background: rgba(197,150,26,.15);  color: #E8B836; }
+
+  .disabled-panel { opacity: .35; pointer-events: none; transition: opacity .2s; }
+
+  /* Chips de filtro de sentimiento */
+  .chip {
+    padding: 5px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer; border: 1px solid transparent;
+    transition: all .15s; user-select: none;
+  }
+  .chip.todos    { background: rgba(38,166,154,.12);  color: #26A69A; }
+  .chip.bullish  { background: rgba(74,222,128,.12);  color: #4ADE80; }
+  .chip.bearish  { background: rgba(239,83,80,.12);   color: #EF5350; }
+  .chip.neutral  { background: rgba(197,150,26,.15);  color: #E8B836; }
+  .chip.activo   { border-color: currentColor; }
+
+  /* Tarjeta de noticia — borde izquierdo según sentimiento */
+  .noticia-card { border-left: 4px solid #1F3864; animation: fadeUp .35s ease both; }
+  .noticia-card.bullish { border-left-color: #4ADE80; }
+  .noticia-card.bearish { border-left-color: #EF5350; }
+  .noticia-card.neutral { border-left-color: #C5961A; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Badge de origen del dato: yfinance real vs respaldo simulado */
+  .origen-badge.real      { background: rgba(38,166,154,.14); color: #26A69A; }
+  .origen-badge.respaldo  { background: rgba(197,150,26,.15); color: #E8B836; }
+
+  /* Aguja del velocímetro */
+  #gauge-needle { transition: transform 1.4s cubic-bezier(.4,0,.2,1); transform-origin: 100px 100px; }
+</style>
+</head>
+
+<body class="bg-navy-base text-ink-100 font-sans antialiased">
+
+  <!-- ============ HEADER (idéntico patrón a portafolio.html) ============ -->
+  <header class="border-b border-navy-border/60 bg-navy-deep/40">
+    <div class="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gold/15 text-gold flex items-center justify-center shrink-0">
+          <i data-lucide="newspaper" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white">Ernesto Investing AI</h1>
+          <p class="text-sm text-ink-300">Análisis de Sentimiento NLP (VADER) — Datos Reales MongoDB / FastAPI</p>
+        </div>
+      </div>
+      <nav class="flex flex-wrap gap-2">
+        <a href="home.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border text-ink-300 text-sm hover:border-teal/60 hover:text-teal transition-colors">
+          <i data-lucide="home" class="w-4 h-4"></i> Portal
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ============ BARRA DE ESTADO DE CONEXIÓN ============ -->
+  <section class="border-b border-navy-border/60 bg-navy-card/30">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-300">
+        <span id="dotEstado" class="w-2 h-2 rounded-full bg-ink-500"></span>
+        <span id="estadoTexto">Conectando con la API...</span>
+      </div>
+      <div class="text-xs text-ink-500 font-mono" id="reloj">--:--:--</div>
+    </div>
+  </section>
+
+  <!-- ============ CONTENIDO ============ -->
+  <main class="max-w-6xl mx-auto px-6 py-8">
+    <div id="aviso" class="mb-6"></div>
+
+    <div id="panelContenido">
+
+      <!-- FILA 1: FILTROS -->
+      <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-5 mb-6 flex flex-wrap items-center gap-4">
+        <!-- Ticker -->
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-bold uppercase tracking-wide text-ink-300">Ticker</span>
+          <select id="filtro-ticker" class="bg-navy-deep border border-navy-border rounded-lg px-3 py-1.5 text-sm text-ink-100 outline-none focus:border-teal">
+            <option value="TODOS">Todos</option>
+            <option value="FSM">FSM</option>
+            <option value="VOLCABC1.LM">VOLCABC1.LM</option>
+            <option value="ABX.TO">ABX.TO</option>
+            <option value="BVN">BVN</option>
+            <option value="BHP">BHP</option>
+          </select>
+        </div>
+        <!-- Fecha desde -->
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-bold uppercase tracking-wide text-ink-300">Desde</span>
+          <input type="date" id="filtro-desde" value=""
+            class="bg-navy-deep border border-navy-border rounded-lg px-3 py-1.5 text-sm text-ink-100 outline-none focus:border-teal [color-scheme:dark]" />
+        </div>
+        <!-- Fecha hasta -->
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-bold uppercase tracking-wide text-ink-300">Hasta</span>
+          <input type="date" id="filtro-hasta" value=""
+            class="bg-navy-deep border border-navy-border rounded-lg px-3 py-1.5 text-sm text-ink-100 outline-none focus:border-teal [color-scheme:dark]" />
+        </div>
+        <!-- Sentimiento -->
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-bold uppercase tracking-wide text-ink-300">Sentimiento</span>
+          <div class="flex gap-1.5 flex-wrap" id="chips-sentimiento">
+            <div class="chip todos activo" data-sent="TODOS">Todos</div>
+            <div class="chip bullish" data-sent="BULLISH">▲ Bullish</div>
+            <div class="chip bearish" data-sent="BEARISH">▼ Bearish</div>
+            <div class="chip neutral" data-sent="NEUTRAL">● Neutral</div>
+          </div>
+        </div>
+        <!-- Botones -->
+        <div class="flex items-center gap-2 ml-auto">
+          <button id="btn-aplicar-filtros"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal text-navy-deep text-sm font-bold hover:opacity-90 transition-opacity">
+            <i data-lucide="filter" class="w-4 h-4"></i> Aplicar
+          </button>
+          <button id="btn-reset-filtros"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-navy-border text-ink-300 text-sm font-semibold hover:border-teal/60 hover:text-teal transition-colors">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Restablecer
+          </button>
+        </div>
+      </div>
+
+      <!-- FILA 2: FEED + PANELES -->
+      <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+
+        <!-- COLUMNA IZQUIERDA: FEED DE NOTICIAS -->
+        <div class="flex flex-col gap-3">
+          <div class="text-xs text-ink-500" id="contador-resultados">Mostrando 0 de 0 noticias</div>
+          <div id="feed-noticias" class="flex flex-col gap-3">
+            <!-- Generado dinámicamente por JavaScript -->
+          </div>
+        </div>
+
+        <!-- COLUMNA DERECHA: PANELES ANALÍTICOS -->
+        <div class="flex flex-col gap-6">
+
+          <!-- PANEL 1: Velocímetro de sentimiento agregado -->
+          <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+            <div class="flex items-center gap-2 mb-4">
+              <i data-lucide="gauge" class="w-4 h-4 text-mint"></i>
+              <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Sentimiento Agregado del Mercado</span>
+            </div>
+            <div class="flex flex-col items-center gap-2 py-2">
+              <svg width="200" height="120" viewBox="0 0 200 115" xmlns="http://www.w3.org/2000/svg">
+                <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1F3864" stroke-width="18" stroke-linecap="round"/>
+                <path d="M 20 100 A 80 80 0 0 1 80 28" fill="none" stroke="#EF5350" stroke-width="18" stroke-linecap="round" opacity=".75"/>
+                <path d="M 80 28 A 80 80 0 0 1 120 28" fill="none" stroke="#C5961A" stroke-width="18" stroke-linecap="round" opacity=".7"/>
+                <path d="M 120 28 A 80 80 0 0 1 180 100" fill="none" stroke="#4ADE80" stroke-width="18" stroke-linecap="round" opacity=".75"/>
+                <line id="gauge-needle" x1="100" y1="100" x2="100" y2="30" stroke="#E2E8F3" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="100" cy="100" r="7" fill="#0D1B33" stroke="#1F3864" stroke-width="1.5"/>
+                <circle cx="100" cy="100" r="3.5" fill="#C5961A"/>
+                <text x="18" y="115" font-size="9" fill="#EF5350" font-weight="700" font-family="Inter,sans-serif">BEARISH</text>
+                <text x="83" y="22" font-size="9" fill="#E8B836" font-weight="700" font-family="Inter,sans-serif">NEUTRAL</text>
+                <text x="140" y="115" font-size="9" fill="#4ADE80" font-weight="700" font-family="Inter,sans-serif">BULLISH</text>
+              </svg>
+              <div class="text-2xl font-extrabold text-white text-center">
+                <span id="gauge-valor-num">—</span>
+                <div class="text-[11px] font-medium text-ink-300 mt-0.5">Compound promedio</div>
+              </div>
+              <div class="senal-badge hold text-sm px-4 py-1.5" id="gauge-etiqueta">● NEUTRAL</div>
+            </div>
+          </div>
+
+          <!-- PANEL 2: Distribución (Chart.js) -->
+          <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+            <div class="flex items-center gap-2 mb-4">
+              <i data-lucide="bar-chart-2" class="w-4 h-4 text-mint"></i>
+              <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Distribución de Sentimiento</span>
+            </div>
+            <div class="relative h-[180px]">
+              <canvas id="chart-distribucion"></canvas>
+            </div>
+          </div>
+
+          <!-- PANEL 3: Resumen visual por categoría -->
+          <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+            <div class="flex items-center gap-2 mb-4">
+              <i data-lucide="list" class="w-4 h-4 text-mint"></i>
+              <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Resumen Visual por Categoría</span>
+            </div>
+            <div class="flex flex-col gap-3 empty-space" id="dist-row"></div>
+          </div>
+
+          <!-- PANEL 4: Modelo NLP -->
+          <div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-6">
+            <div class="flex items-center gap-2 mb-4">
+              <i data-lucide="cpu" class="w-4 h-4 text-mint"></i>
+              <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">Modelo NLP — VADER SentimentIntensityAnalyzer</span>
+            </div>
+            <div id="panel-modelos" class="flex flex-col gap-1">
+              <div class="flex justify-between items-center text-sm py-2 border-b border-navy-border/40">
+                <span class="text-ink-300">VADER Compound (prom.)</span>
+                <span class="font-bold text-white" id="vader-prom">—</span>
+              </div>
+              <div class="flex justify-between items-center text-sm py-2 border-b border-navy-border/40">
+                <span class="text-ink-300">Noticias analizadas</span>
+                <span class="font-bold text-white" id="total-noticias">—</span>
+              </div>
+              <div class="flex justify-between items-center text-sm py-2 border-b border-navy-border/40">
+                <span class="text-ink-300">Con datos reales (yfinance)</span>
+                <span class="font-bold text-teal" id="total-reales">—</span>
+              </div>
+              <div class="flex justify-between items-center text-sm py-2 border-b border-navy-border/40">
+                <span class="text-ink-300">Respaldo simulado</span>
+                <span class="font-bold text-gold" id="total-respaldo">—</span>
+              </div>
+              <div class="flex justify-between items-center text-sm py-2">
+                <span class="text-ink-300">Tickers cubiertos</span>
+                <span class="font-bold text-white"><span id="total-tickers">—</span> / 5</span>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- fin col-derecha -->
+
+      </div>
+
+    </div><!-- /panelContenido -->
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="border-t border-navy-border/60 bg-navy-deep/40 mt-8">
+    <div class="max-w-6xl mx-auto px-6 py-8 text-sm text-ink-500 text-center">
+      Ernesto Investing AI — iDeSo · UNMSM · Prof. E. D. Cancho-Rodríguez, MBA (GWU)
+    </div>
+  </footer>
+
+<script>
+lucide.createIcons();
+
+/* ============================================================
+   CONFIGURACIÓN — 5 tickers mineros reales (MongoDB Atlas)
+   ============================================================ */
+const TICKERS = ['FSM', 'VOLCABC1.LM', 'ABX.TO', 'BVN', 'BHP'];
+
+const NOMBRES = {
+  'FSM':         'Fortuna Silver Mines',
+  'VOLCABC1.LM': 'Volcan Cia. Minera',
+  'ABX.TO':      'Barrick Gold Corp.',
+  'BVN':         'Cia. de Minas Buenaventura',
+  'BHP':         'BHP Billiton Limited'
+};
+
+/* Noticias reales, pobladas por cargarSentimiento() desde
+   GET /api/sentimiento/{ticker} (Notebook 7, colección sentimiento_nlp).
+   Empieza vacío: no hay datos simulados en el frontend. */
+let NOTICIAS = [];
+let chartDistrib = null;
+
+/* ============================================================
+   CONEXIÓN A LA API (mismo patrón que portafolio.html)
+   ============================================================ */
+function getApiUrl() {
+  return sessionStorage.getItem('API_URL');
+}
+
+function mostrarAviso(tipo, html) {
+  const aviso = document.getElementById('aviso');
+  const estilos = {
+    info:  'bg-sky/10 text-sky border-sky/30',
+    error: 'bg-coral/10 text-coral border-coral/30'
+  };
+  const icono = tipo === 'error' ? 'alert-circle' : 'loader';
+
+  aviso.innerHTML =
+    '<div class="inline-flex items-start gap-2 px-4 py-3 rounded-xl border text-sm ' + estilos[tipo] + '">' +
+      '<i data-lucide="' + icono + '" class="w-4 h-4 mt-0.5 shrink-0 ' + (tipo === 'info' ? 'animate-spin' : '') + '"></i>' +
+      '<span>' + html + '</span>' +
+    '</div>';
+
+  lucide.createIcons();
+}
+
+function limpiarAviso() { document.getElementById('aviso').innerHTML = ''; }
+
+function setEstadoConexion(ok) {
+  document.getElementById('dotEstado').className = 'w-2 h-2 rounded-full ' + (ok ? 'bg-mint' : 'bg-coral');
+  document.getElementById('estadoTexto').textContent = ok ? 'Datos reales conectados' : 'Sin conexión a la API';
+}
+
+function setPanelHabilitado(ok) {
+  document.getElementById('panelContenido').classList.toggle('disabled-panel', !ok);
+}
+
+/* ============================================================
+   RELOJ EN TIEMPO REAL
+   ============================================================ */
+function actualizarReloj() {
+  const ahora = new Date();
+  document.getElementById('reloj').textContent = ahora.toLocaleTimeString('es-PE', { hour12: false });
+}
+actualizarReloj();
+setInterval(actualizarReloj, 1000);
+
+/* ============================================================
+   ESTADO DE FILTROS
+   ============================================================ */
+let filtroTicker      = "TODOS";
+let filtroSentimiento = "TODOS";
+let filtroDesde       = "";
+let filtroHasta       = "";
+
+/* ============================================================
+   FLUJO PRINCIPAL — obtiene datos reales de MongoDB vía FastAPI
+   GET /api/sentimiento/{ticker} para cada uno de los 5 tickers
+   ============================================================ */
+async function cargarSentimiento() {
+  const apiUrl = getApiUrl();
+  if (!apiUrl) {
+    mostrarAviso('error', 'No hay URL de API. Vuelve al portal y verifica la conexión.');
+    setEstadoConexion(false);
+    setPanelHabilitado(false);
+    return;
+  }
+
+  try {
+    mostrarAviso('info', 'Obteniendo análisis de sentimiento real (VADER) de MongoDB / FastAPI para los 5 tickers...');
+    const headers = { 'ngrok-skip-browser-warning': 'true' };
+
+    const respuestas = await Promise.all(TICKERS.map(t =>
+      fetch(apiUrl + '/api/sentimiento/' + encodeURIComponent(t), { headers }).then(r => {
+        if (r.status === 404) return null; // Notebook 7 aún no ejecutado para este ticker
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' en /api/sentimiento/' + t);
+        return r.json();
+      })
+    ));
+
+    NOTICIAS = [];
+    let idCounter = 1;
+
+    respuestas.forEach((data, i) => {
+      const ticker = TICKERS[i];
+      const doc = data && data.sentimiento;
+      if (!doc || !Array.isArray(doc.noticias)) return;
+
+      doc.noticias.forEach(n => {
+        const scores = n.scores || {};
+        NOTICIAS.push({
+          id: idCounter++,
+          titulo: n.titulo,
+          publicador: n.publicador || 'Desconocido',
+          origenDato: n.fuente === 'simulado' ? 'simulado' : 'yfinance',
+          fecha: n.fecha_publicacion,
+          ticker: ticker,
+          sentimiento: (n.clasificacion || 'Neutral').toUpperCase(),
+          vader: {
+            pos: scores.pos ?? 0,
+            neg: scores.neg ?? 0,
+            neu: scores.neu ?? 0,
+            compound: scores.compound ?? 0
+          }
+        });
+      });
+    });
+
+    if (NOTICIAS.length === 0) {
+      mostrarAviso('error', 'No se encontraron datos de sentimiento en MongoDB. Verifica que el Notebook 7 (NLP VADER) haya sido ejecutado.');
+      setEstadoConexion(false);
+      setPanelHabilitado(false);
+      return;
+    }
+
+    // Rango de fechas por defecto: todo el rango real disponible
+    const fechas = NOTICIAS.map(n => n.fecha).sort();
+    filtroDesde = fechas[0];
+    filtroHasta = fechas[fechas.length - 1];
+    document.getElementById('filtro-desde').value = filtroDesde;
+    document.getElementById('filtro-hasta').value  = filtroHasta;
+
+    setEstadoConexion(true);
+    setPanelHabilitado(true);
+    limpiarAviso();
+    renderFeed();
+  } catch (e) {
+    mostrarAviso('error', 'No se pudo obtener datos reales de la API (' + e.message + '). Vuelve al portal y verifica la conexión.');
+    setEstadoConexion(false);
+    setPanelHabilitado(false);
+  }
+}
+
+/* ============================================================
+   UTILIDADES DE RENDERIZADO
+   ============================================================ */
+
+function iconoSentimiento(sent) {
+  if (sent === "BULLISH") return `<svg viewBox="0 0 12 12" fill="none" width="12" height="12"><polyline points="2,9 6,3 10,9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  if (sent === "BEARISH") return `<svg viewBox="0 0 12 12" fill="none" width="12" height="12"><polyline points="2,3 6,9 10,3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  return `<svg viewBox="0 0 12 12" fill="none" width="12" height="12"><circle cx="6" cy="6" r="3.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>`;
+}
+
+function claseSenal(sent) {
+  if (sent === "BULLISH") return "buy";
+  if (sent === "BEARISH") return "sell";
+  return "hold";
+}
+
+function renderNoticia(n) {
+  const clsSenal = claseSenal(n.sentimiento);
+  const clsBorde = n.sentimiento.toLowerCase();
+  const c = n.vader.compound;
+  const compStr = (c >= 0 ? "+" : "") + c.toFixed(3);
+
+  return `
+  <div class="noticia-card ${clsBorde} rounded-2xl border border-navy-border/70 bg-navy-card/60 p-5">
+    <div class="flex justify-between items-start gap-3 mb-2">
+      <div class="text-sm font-bold text-white leading-snug flex-1">${n.titulo}</div>
+      <div class="senal-badge ${clsSenal} shrink-0">
+        ${iconoSentimiento(n.sentimiento)}
+        ${n.sentimiento}
+      </div>
+    </div>
+    <div class="flex items-center gap-3 text-xs text-ink-500 mb-3 flex-wrap">
+      <span class="font-semibold text-ink-300">${n.publicador}</span>
+      <span>·</span>
+      <span>${n.fecha}</span>
+      <span class="bg-navy-deep border border-navy-border rounded px-2 py-0.5 text-[11px] font-bold text-ink-100">${n.ticker}</span>
+    </div>
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div class="flex gap-2 flex-wrap">
+        <div class="bg-navy-deep border border-navy-border rounded-md px-2 py-1 text-[11px] text-ink-300">pos <span class="font-bold text-ink-100">${n.vader.pos.toFixed(3)}</span></div>
+        <div class="bg-navy-deep border border-navy-border rounded-md px-2 py-1 text-[11px] text-ink-300">neg <span class="font-bold text-ink-100">${n.vader.neg.toFixed(3)}</span></div>
+        <div class="bg-navy-deep border border-navy-border rounded-md px-2 py-1 text-[11px] text-ink-300">neu <span class="font-bold text-ink-100">${n.vader.neu.toFixed(3)}</span></div>
+        <div class="senal-badge ${clsSenal} text-[12px]">compound: ${compStr}</div>
+      </div>
+      <div class="origen-badge ${n.origenDato === 'simulado' ? 'respaldo' : 'real'} inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold">
+        <i data-lucide="database" class="w-3 h-3"></i>
+        ${n.origenDato === 'simulado' ? 'Respaldo simulado' : 'yfinance (real)'}
+      </div>
+    </div>
+  </div>`;
+}
+
+function filtrarNoticias() {
+  return NOTICIAS.filter(n => {
+    const okTicker = (filtroTicker === "TODOS" || n.ticker === filtroTicker);
+    const okSent   = (filtroSentimiento === "TODOS" || n.sentimiento === filtroSentimiento);
+    const okDesde  = (!filtroDesde || n.fecha >= filtroDesde);
+    const okHasta  = (!filtroHasta || n.fecha <= filtroHasta);
+    return okTicker && okSent && okDesde && okHasta;
+  });
+}
+
+function renderFeed() {
+  const filtradas = filtrarNoticias();
+  const feed = document.getElementById("feed-noticias");
+  const contador = document.getElementById("contador-resultados");
+
+  contador.textContent = `Mostrando ${filtradas.length} de ${NOTICIAS.length} noticias`;
+
+  if (filtradas.length === 0) {
+    feed.innerHTML = `<div class="rounded-2xl border border-navy-border/70 bg-navy-card/60 p-10 text-center text-ink-500 text-sm">
+      <i data-lucide="search-x" class="w-8 h-8 mx-auto mb-3 text-ink-500"></i>
+      No se encontraron noticias con los filtros seleccionados
+    </div>`;
+    lucide.createIcons();
+    actualizarPaneles(filtradas);
+    return;
+  }
+
+  feed.innerHTML = filtradas.map(renderNoticia).join("");
+  lucide.createIcons();
+  actualizarPaneles(filtradas);
+}
+
+/* ============================================================
+   ACTUALIZACIÓN DE PANELES ANALÍTICOS
+   ============================================================ */
+function actualizarPaneles(noticias) {
+  const total   = noticias.length;
+  const nbull   = noticias.filter(n => n.sentimiento === "BULLISH").length;
+  const nbear   = noticias.filter(n => n.sentimiento === "BEARISH").length;
+  const nneu    = noticias.filter(n => n.sentimiento === "NEUTRAL").length;
+  const pctBull = total ? (nbull / total * 100).toFixed(0) : 0;
+  const pctBear = total ? (nbear / total * 100).toFixed(0) : 0;
+  const pctNeu  = total ? (nneu  / total * 100).toFixed(0) : 0;
+
+  const promComp = total
+    ? noticias.reduce((s, n) => s + n.vader.compound, 0) / total
+    : 0;
+  const compStr = (promComp >= 0 ? "+" : "") + promComp.toFixed(3);
+
+  let sentAgregado = "NEUTRAL";
+  if (promComp >=  0.05) sentAgregado = "BULLISH";
+  if (promComp <= -0.05) sentAgregado = "BEARISH";
+
+  // --- Velocímetro ---
+  const angulo = promComp * 90;
+  document.getElementById("gauge-needle").style.transform = `rotate(${angulo}deg)`;
+  document.getElementById("gauge-valor-num").textContent = compStr;
+  const gEl = document.getElementById("gauge-etiqueta");
+  gEl.textContent  = sentAgregado === "BULLISH" ? "▲ BULLISH"
+                   : sentAgregado === "BEARISH" ? "▼ BEARISH" : "● NEUTRAL";
+  gEl.className    = "senal-badge text-sm px-4 py-1.5 " + claseSenal(sentAgregado);
+
+  // --- Barras de distribución visual ---
+  document.getElementById("dist-row").innerHTML = `
+    <div class="flex items-center gap-2">
+      <span class="text-[12px] font-semibold text-mint w-16 shrink-0">BULLISH</span>
+      <div class="flex-1 h-2.5 bg-navy-deep rounded-full overflow-hidden"><div class="h-full bg-mint rounded-full transition-all" style="width:${pctBull}%"></div></div>
+      <span class="text-[12px] font-bold text-white w-9 text-right shrink-0">${pctBull}%</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-[12px] font-semibold text-coral w-16 shrink-0">BEARISH</span>
+      <div class="flex-1 h-2.5 bg-navy-deep rounded-full overflow-hidden"><div class="h-full bg-coral rounded-full transition-all" style="width:${pctBear}%"></div></div>
+      <span class="text-[12px] font-bold text-white w-9 text-right shrink-0">${pctBear}%</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-[12px] font-semibold text-gold w-16 shrink-0">NEUTRAL</span>
+      <div class="flex-1 h-2.5 bg-navy-deep rounded-full overflow-hidden"><div class="h-full bg-gold rounded-full transition-all" style="width:${pctNeu}%"></div></div>
+      <span class="text-[12px] font-bold text-white w-9 text-right shrink-0">${pctNeu}%</span>
+    </div>`;
+
+  // --- Chart.js: distribución ---
+  const ctx = document.getElementById("chart-distribucion").getContext("2d");
+  if (chartDistrib) chartDistrib.destroy();
+  chartDistrib = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["BULLISH", "NEUTRAL", "BEARISH"],
+      datasets: [{
+        label: "Noticias",
+        data: [nbull, nneu, nbear],
+        backgroundColor: ["#4ADE80", "#C5961A", "#EF5350"],
+        borderColor:     ["#26A69A", "#8A6D00", "#C62828"],
+        borderWidth: 1.5,
+        borderRadius: 5,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.x} noticia${ctx.parsed.x !== 1 ? "s" : ""}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: "#1F3864" },
+          ticks: { font: { family: "Inter", size: 11 }, color: "#9FB0CE", stepSize: 1 },
+          title: { display: true, text: "Cantidad de noticias", font: { family: "Inter", size: 11 }, color: "#9FB0CE" }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { family: "Inter", size: 12, weight: "700" }, color: "#E2E8F3" }
+        }
+      }
+    }
+  });
+
+  // --- Panel modelo NLP (métricas reales) ---
+  const nReales   = noticias.filter(n => n.origenDato !== "simulado").length;
+  const nRespaldo = total - nReales;
+  const nTickers  = new Set(noticias.map(n => n.ticker)).size;
+
+  document.getElementById("vader-prom").textContent = compStr;
+  document.getElementById("total-noticias").textContent = total;
+  document.getElementById("total-reales").textContent = nReales;
+  document.getElementById("total-respaldo").textContent = nRespaldo;
+  document.getElementById("total-tickers").textContent = nTickers;
+}
+
+/* ============================================================
+   LÓGICA DE FILTROS
+   ============================================================ */
+document.getElementById("chips-sentimiento").addEventListener("click", e => {
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("activo"));
+  chip.classList.add("activo");
+  filtroSentimiento = chip.dataset.sent;
+});
+
+document.getElementById("btn-aplicar-filtros").addEventListener("click", () => {
+  filtroTicker = document.getElementById("filtro-ticker").value;
+  filtroDesde  = document.getElementById("filtro-desde").value;
+  filtroHasta  = document.getElementById("filtro-hasta").value;
+  renderFeed();
+});
+
+document.getElementById("btn-reset-filtros").addEventListener("click", () => {
+  filtroTicker      = "TODOS";
+  filtroSentimiento = "TODOS";
+  const fechas = NOTICIAS.map(n => n.fecha).sort();
+  filtroDesde = fechas[0] || "";
+  filtroHasta = fechas[fechas.length - 1] || "";
+  document.getElementById("filtro-ticker").value = "TODOS";
+  document.getElementById("filtro-desde").value  = filtroDesde;
+  document.getElementById("filtro-hasta").value  = filtroHasta;
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("activo"));
+  document.querySelector(".chip.todos").classList.add("activo");
+  renderFeed();
+});
+
+/* ============================================================
+   INICIALIZACIÓN — carga datos reales desde MongoDB / FastAPI
+   ============================================================ */
+window.addEventListener("DOMContentLoaded", () => {
+  cargarSentimiento();
+});
+</script>
+</body>
+</html>
